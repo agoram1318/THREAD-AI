@@ -1,0 +1,91 @@
+'use client';
+
+import { FormEvent, useState } from 'react';
+
+type RssItem = {
+  title: string;
+  link: string;
+  pubDate: string;
+  contentSnippet: string;
+};
+
+export default function HomePage() {
+  const [url, setUrl] = useState('');
+  const [items, setItems] = useState<RssItem[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setItems([]);
+
+    try {
+      const res = await fetch('/api/rss-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? '알 수 없는 오류가 발생했습니다.');
+      }
+
+      setItems(data.items ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '요청 처리 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="mx-auto max-w-4xl p-6">
+      <h1 className="mb-4 text-2xl font-bold">RSS 테스트 수집</h1>
+
+      <form onSubmit={handleSubmit} className="mb-6 rounded-lg border bg-white p-4 shadow-sm">
+        <label htmlFor="rssUrl" className="mb-2 block text-sm font-medium text-slate-700">
+          RSS URL
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="rssUrl"
+            type="url"
+            required
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://example.com/feed.xml"
+            className="flex-1 rounded border px-3 py-2 outline-none ring-blue-500 focus:ring"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-60"
+          >
+            {loading ? '수집 중...' : '테스트 수집'}
+          </button>
+        </div>
+      </form>
+
+      {error && <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">{error}</div>}
+
+      {items.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">수집된 기사 ({items.length})</h2>
+          {items.map((item, idx) => (
+            <article key={`${item.link}-${idx}`} className="rounded-lg border bg-white p-4 shadow-sm">
+              <a href={item.link} target="_blank" rel="noreferrer" className="text-lg font-semibold text-blue-700 hover:underline">
+                {item.title || '(제목 없음)'}
+              </a>
+              <p className="mt-1 text-sm text-slate-500">{item.pubDate || '날짜 없음'}</p>
+              <p className="mt-2 text-sm text-slate-700">{item.contentSnippet || '요약 없음'}</p>
+            </article>
+          ))}
+        </section>
+      )}
+    </main>
+  );
+}
