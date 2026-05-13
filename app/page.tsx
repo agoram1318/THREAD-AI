@@ -14,12 +14,32 @@ export default function HomePage() {
   const [items, setItems] = useState<RssItem[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+
+  const getItemId = (item: RssItem, idx: number) => `${item.link || item.title || 'rss-item'}-${idx}`;
+
+  const selectedItems = items
+    .map((item, idx) => ({ item, itemId: getItemId(item, idx) }))
+    .filter(({ itemId }) => selectedItemIds.includes(itemId));
+
+  const toggleItemSelection = (itemId: string) => {
+    setSelectedItemIds((currentIds) =>
+      currentIds.includes(itemId)
+        ? currentIds.filter((currentId) => currentId !== itemId)
+        : [...currentIds, itemId],
+    );
+  };
+
+  const removeSelectedItem = (itemId: string) => {
+    setSelectedItemIds((currentIds) => currentIds.filter((currentId) => currentId !== itemId));
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setItems([]);
+    setSelectedItemIds([]);
 
     try {
       const res = await fetch('/api/rss-test', {
@@ -74,16 +94,67 @@ export default function HomePage() {
 
       {items.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">수집된 기사 ({items.length})</h2>
-          {items.map((item, idx) => (
-            <article key={`${item.link}-${idx}`} className="rounded-lg border bg-white p-4 shadow-sm">
-              <a href={item.link} target="_blank" rel="noreferrer" className="text-lg font-semibold text-blue-700 hover:underline">
-                {item.title || '(제목 없음)'}
-              </a>
-              <p className="mt-1 text-sm text-slate-500">{item.pubDate || '날짜 없음'}</p>
-              <p className="mt-2 text-sm text-slate-700">{item.contentSnippet || '요약 없음'}</p>
-            </article>
-          ))}
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">수집된 기사 ({items.length})</h2>
+            <p className="text-sm font-medium text-blue-700">선택한 기사 {selectedItems.length}개</p>
+          </div>
+
+          {items.map((item, idx) => {
+            const itemId = getItemId(item, idx);
+            const isSelected = selectedItemIds.includes(itemId);
+
+            return (
+              <article key={itemId} className="flex gap-3 rounded-lg border bg-white p-4 shadow-sm">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleItemSelection(itemId)}
+                  aria-label={`${item.title || '제목 없는 기사'} 선택`}
+                  className="mt-1 h-4 w-4 rounded border-slate-300"
+                />
+                <div className="min-w-0 flex-1">
+                  <a
+                    href={item.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-lg font-semibold text-blue-700 hover:underline"
+                  >
+                    {item.title || '(제목 없음)'}
+                  </a>
+                  <p className="mt-1 text-sm text-slate-500">{item.pubDate || '날짜 없음'}</p>
+                  <p className="mt-2 text-sm text-slate-700">{item.contentSnippet || '요약 없음'}</p>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      )}
+
+      {items.length > 0 && (
+        <section className="mt-8 rounded-lg border bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">선택된 기사 목록</h2>
+            <span className="text-sm text-slate-500">{selectedItems.length}개 선택됨</span>
+          </div>
+
+          {selectedItems.length > 0 ? (
+            <ul className="space-y-2">
+              {selectedItems.map(({ item, itemId }) => (
+                <li key={itemId} className="flex items-center justify-between gap-3 rounded border border-slate-200 p-3">
+                  <span className="text-sm font-medium text-slate-800">{item.title || '(제목 없음)'}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeSelectedItem(itemId)}
+                    className="shrink-0 rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    제거
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">선택된 기사가 없습니다.</p>
+          )}
         </section>
       )}
     </main>
