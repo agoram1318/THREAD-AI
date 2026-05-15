@@ -48,6 +48,9 @@ type SavedThreadDraft = {
   status: 'draft' | 'used';
 };
 
+type SavedDraftStatusFilter = 'all' | 'draft' | 'used';
+type SavedDraftSortOption = 'latest' | 'oldest';
+
 const PRESET_OPTIONS = [
   '미국 주식 리포트',
   '한국 정치 이슈 정리',
@@ -175,6 +178,10 @@ export default function HomePage() {
   const [savedDrafts, setSavedDrafts] = useState<SavedThreadDraft[]>([]);
   const [draftStorageReady, setDraftStorageReady] = useState(false);
   const [draftLibraryMessage, setDraftLibraryMessage] = useState('');
+  const [savedDraftSearch, setSavedDraftSearch] = useState('');
+  const [savedDraftStatusFilter, setSavedDraftStatusFilter] = useState<SavedDraftStatusFilter>('all');
+  const [savedDraftPresetFilter, setSavedDraftPresetFilter] = useState('all');
+  const [savedDraftSort, setSavedDraftSort] = useState<SavedDraftSortOption>('latest');
   const [autoWorkflowRunning, setAutoWorkflowRunning] = useState(false);
   const [autoWorkflowStep, setAutoWorkflowStep] = useState('');
   const [autoWorkflowLogs, setAutoWorkflowLogs] = useState<AutoWorkflowLog[]>([]);
@@ -1101,6 +1108,34 @@ export default function HomePage() {
         : '1단계 진행 중';
 
   const selectedSource = getSourceById(selectedSourceId);
+  const savedDraftPresetOptions = [...new Set(savedDrafts.map((savedDraft) => savedDraft.selectedPreset))].sort(
+    (a, b) => a.localeCompare(b, 'ko'),
+  );
+  const filteredSavedDrafts = savedDrafts
+    .filter((savedDraft) => {
+      if (savedDraftStatusFilter !== 'all' && savedDraft.status !== savedDraftStatusFilter) {
+        return false;
+      }
+
+      if (savedDraftPresetFilter !== 'all' && savedDraft.selectedPreset !== savedDraftPresetFilter) {
+        return false;
+      }
+
+      const keyword = savedDraftSearch.trim().toLowerCase();
+      if (!keyword) {
+        return true;
+      }
+
+      const target = `${savedDraft.selectedPreset} ${savedDraft.content}`.toLowerCase();
+      return target.includes(keyword);
+    })
+    .sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      const normalizedA = Number.isNaN(timeA) ? 0 : timeA;
+      const normalizedB = Number.isNaN(timeB) ? 0 : timeB;
+      return savedDraftSort === 'latest' ? normalizedB - normalizedA : normalizedA - normalizedB;
+    });
 
   return (
     <main className="min-h-screen bg-slate-50 py-8">
@@ -1728,6 +1763,9 @@ export default function HomePage() {
           <div>
             <h2 className="text-lg font-semibold text-slate-900">저장된 초안</h2>
             <p className="mt-1 text-sm text-slate-500">생성한 초안을 저장하고 나중에 다시 불러올 수 있습니다.</p>
+            <p className="mt-1 text-xs text-slate-500">
+              전체 {savedDrafts.length}개 / 현재 표시 {filteredSavedDrafts.length}개
+            </p>
           </div>
 
           {draftLibraryMessage && (
@@ -1736,13 +1774,56 @@ export default function HomePage() {
             </div>
           )}
 
+          <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-4">
+            <input
+              type="text"
+              value={savedDraftSearch}
+              onChange={(e) => setSavedDraftSearch(e.target.value)}
+              placeholder="프리셋 또는 초안 내용 검색"
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none ring-blue-500 focus:ring"
+            />
+            <select
+              value={savedDraftStatusFilter}
+              onChange={(e) => setSavedDraftStatusFilter(e.target.value as SavedDraftStatusFilter)}
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
+            >
+              <option value="all">상태: 전체</option>
+              <option value="draft">상태: draft</option>
+              <option value="used">상태: used</option>
+            </select>
+            <select
+              value={savedDraftPresetFilter}
+              onChange={(e) => setSavedDraftPresetFilter(e.target.value)}
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
+            >
+              <option value="all">프리셋: 전체</option>
+              {savedDraftPresetOptions.map((preset) => (
+                <option key={`saved-draft-preset-${preset}`} value={preset}>
+                  {preset}
+                </option>
+              ))}
+            </select>
+            <select
+              value={savedDraftSort}
+              onChange={(e) => setSavedDraftSort(e.target.value as SavedDraftSortOption)}
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
+            >
+              <option value="latest">정렬: 최신순</option>
+              <option value="oldest">정렬: 오래된순</option>
+            </select>
+          </div>
+
           {savedDrafts.length === 0 ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
               아직 저장된 초안이 없습니다
             </div>
+          ) : filteredSavedDrafts.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              조건에 맞는 초안이 없습니다.
+            </div>
           ) : (
             <ul className="space-y-3">
-              {savedDrafts.map((savedDraft) => (
+              {filteredSavedDrafts.map((savedDraft) => (
                 <li key={savedDraft.id} className="rounded-xl border border-slate-200 p-4">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
