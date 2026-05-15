@@ -24,6 +24,7 @@ export default function HomePage() {
   const [selectedPreset, setSelectedPreset] = useState('');
   const [draft, setDraft] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
+  const [draftLoading, setDraftLoading] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const getItemKey = (item: RssItem, idx: number) => `${item.link}-${idx}`;
@@ -42,42 +43,46 @@ export default function HomePage() {
     setSelectedItemKeys((prev) => prev.filter((key) => key !== itemKey));
   };
 
-  const generateMockThreadDraft = (preset: string, selectedArticles: RssItem[]) => {
-    const sourceList = selectedArticles
-      .map((article, idx) => `${idx + 1}. ${article.title || '(제목 없음)'}`)
-      .join('\n');
-
-    const summaryList = selectedArticles
-      .slice(0, 3)
-      .map((article, idx) => `- 기사 ${idx + 1}: ${article.contentSnippet || '요약 없음'}`)
-      .join('\n');
-
-    return [
-      `후킹 문장`,
-      `${preset} 관점에서 지금 꼭 봐야 할 뉴스만 빠르게 정리했습니다.`,
-      ``,
-      `핵심 포인트 3개`,
-      summaryList || '- 선택된 기사 요약이 없습니다.',
-      ``,
-      `쉬운 해석`,
-      `복잡한 흐름을 한 줄로 보면, "${preset}"에 맞춰 중요한 맥락을 먼저 이해하면 다음 뉴스가 훨씬 쉽게 보입니다.`,
-      ``,
-      `질문형 마무리`,
-      `이 이슈에서 가장 먼저 더 파고들고 싶은 포인트는 무엇인가요?`,
-      ``,
-      `참고 출처 목록`,
-      sourceList || '- 출처 없음',
-    ].join('\n');
-  };
-
-  const handleGenerateDraft = () => {
+  const handleGenerateDraft = async () => {
     if (!canGenerateDraft) {
       return;
     }
 
-    const nextDraft = generateMockThreadDraft(selectedPreset, selectedItems);
-    setDraft(nextDraft);
+    setDraftLoading(true);
+    setError('');
     setCopySuccess(false);
+
+    try {
+      const res = await fetch('/api/generate-thread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preset: selectedPreset,
+          items: selectedItems.map((item) => ({
+            title: item.title,
+            link: item.link,
+            contentSnippet: item.contentSnippet,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? '쓰레드 초안 생성 중 오류가 발생했습니다.');
+      }
+
+      setDraft(data.draft ?? '');
+    } catch (err) {
+      setDraft('');
+      setError(
+        err instanceof Error
+          ? err.message
+          : '쓰레드 초안 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+      );
+    } finally {
+      setDraftLoading(false);
+    }
   };
 
   const handleCopyDraft = async () => {
@@ -102,6 +107,7 @@ export default function HomePage() {
     setSelectedPreset('');
     setDraft('');
     setCopySuccess(false);
+    setDraftLoading(false);
 
     try {
       const res = await fetch('/api/rss-test', {
@@ -246,10 +252,10 @@ export default function HomePage() {
             <button
               type="button"
               onClick={handleGenerateDraft}
-              disabled={!canGenerateDraft}
+              disabled={!canGenerateDraft || draftLoading}
               className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-60"
             >
-              쓰레드 초안 생성
+              {draftLoading ? '초안 생성 중...' : '쓰레드 초안 생성'}
             </button>
             {!canGenerateDraft && (
               <p className="text-sm text-slate-500">
