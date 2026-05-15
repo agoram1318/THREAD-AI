@@ -9,6 +9,13 @@ type RssItem = {
   contentSnippet: string;
 };
 
+type RecommendedArticle = {
+  title: string;
+  url: string;
+  score: number;
+  reason: string;
+};
+
 const PRESET_OPTIONS = [
   '미국 주식 리포트',
   '한국 정치 이슈 정리',
@@ -24,6 +31,9 @@ export default function HomePage() {
   const [selectedPreset, setSelectedPreset] = useState('');
   const [draft, setDraft] = useState('');
   const [draftError, setDraftError] = useState('');
+  const [recommendedArticles, setRecommendedArticles] = useState<RecommendedArticle[]>([]);
+  const [recommendLoading, setRecommendLoading] = useState(false);
+  const [recommendError, setRecommendError] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,6 +44,7 @@ export default function HomePage() {
     .map((itemKey) => items.find((item, idx) => getItemKey(item, idx) === itemKey))
     .filter((item): item is RssItem => Boolean(item));
   const canGenerateDraft = selectedItems.length > 0 && Boolean(selectedPreset);
+  const canRecommendArticles = items.length > 0 && Boolean(selectedPreset);
 
   const toggleItemSelection = (itemKey: string) => {
     setSelectedItemKeys((prev) =>
@@ -41,8 +52,93 @@ export default function HomePage() {
     );
   };
 
+  const addItemSelection = (itemKey: string) => {
+    setSelectedItemKeys((prev) => (prev.includes(itemKey) ? prev : [...prev, itemKey]));
+  };
+
   const removeSelectedItem = (itemKey: string) => {
     setSelectedItemKeys((prev) => prev.filter((key) => key !== itemKey));
+  };
+
+  const findItemKeyByRecommendation = (recommended: RecommendedArticle) => {
+    const indexByLink = items.findIndex((item) => item.link === recommended.url);
+    if (indexByLink >= 0) {
+      return getItemKey(items[indexByLink], indexByLink);
+    }
+
+    const indexByTitle = items.findIndex((item) => item.title === recommended.title);
+    if (indexByTitle >= 0) {
+      return getItemKey(items[indexByTitle], indexByTitle);
+    }
+
+    return null;
+  };
+
+  const handleRecommendArticles = async () => {
+    if (!canRecommendArticles) {
+      return;
+    }
+
+    setRecommendLoading(true);
+    setRecommendError('');
+
+    try {
+      const res = await fetch('/api/recommend-articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preset: selectedPreset,
+          items: items.map((item) => ({
+            title: item.title,
+            link: item.link,
+            contentSnippet: item.contentSnippet,
+            pubDate: item.pubDate,
+          })),
+        }),
+      });
+
+      const data = (await res.json()) as {
+        recommendations?: RecommendedArticle[];
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(data.error ?? `기사 추천에 실패했습니다. (status: ${res.status})`);
+      }
+
+      const nextRecommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
+      if (nextRecommendations.length === 0) {
+        throw new Error('추천 결과가 비어 있습니다. 다시 시도해주세요.');
+      }
+
+      setRecommendedArticles(nextRecommendations);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : '추천 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+      setRecommendError(message);
+      setRecommendedArticles([]);
+    } finally {
+      setRecommendLoading(false);
+    }
+  };
+
+  const handleAddRecommendedArticle = (recommended: RecommendedArticle) => {
+    const itemKey = findItemKeyByRecommendation(recommended);
+    if (!itemKey) {
+      return;
+    }
+
+    addItemSelection(itemKey);
+  };
+
+  const handleAutoSelectTopRecommended = () => {
+    const topRecommendations = [...recommendedArticles].sort((a, b) => b.score - a.score).slice(0, 3);
+    for (const recommended of topRecommendations) {
+      const itemKey = findItemKeyByRecommendation(recommended);
+      if (itemKey) {
+        addItemSelection(itemKey);
+      }
+    }
   };
 
   const handleGenerateDraft = async () => {
@@ -120,6 +216,9 @@ export default function HomePage() {
     setItems([]);
     setSelectedItemKeys([]);
     setSelectedPreset('');
+    setRecommendedArticles([]);
+    setRecommendError('');
+    setRecommendLoading(false);
     setDraft('');
     setDraftError('');
     setCopySuccess(false);
@@ -248,7 +347,11 @@ export default function HomePage() {
             <h2 className="text-lg font-semibold">글 생성 프리셋 선택</h2>
             <select
               value={selectedPreset}
-              onChange={(e) => setSelectedPreset(e.target.value)}
+              onChange={(e) => {
+                setSelectedPreset(e.target.value);
+                setRecommendedArticles([]);
+                setRecommendError('');
+              }}
               className="w-full rounded border px-3 py-2 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
             >
               <option value="">프리셋 선택</option>
@@ -261,6 +364,70 @@ export default function HomePage() {
             <p className="text-sm text-slate-600">
               선택된 프리셋: {selectedPreset || '프리셋을 선택해주세요'}
             </p>
+          </section>
+
+          <section className="mt-4 space-y-3 rounded-lg border bg-white p-4 shadow-sm">
+            <h2 className="text-lg font-semibold">AI 기사 추천</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRecommendArticles}
+                disabled={!canRecommendArticles || recommendLoading}
+                className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-60"
+              >
+                AI가 좋은 기사 추천
+              </button>
+              {recommendedArticles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleAutoSelectTopRecommended}
+                  className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  상위 추천 기사 자동 선택
+                </button>
+              )}
+            </div>
+
+            {recommendLoading && <p className="text-sm text-slate-600">추천 분석 중...</p>}
+            {!recommendLoading && !canRecommendArticles && (
+              <p className="text-sm text-slate-500">
+                {items.length === 0 ? '기사 목록이 있어야 추천할 수 있습니다.' : '프리셋을 선택해주세요.'}
+              </p>
+            )}
+            {!recommendLoading && recommendError && (
+              <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {recommendError}
+              </div>
+            )}
+            {!recommendLoading && recommendedArticles.length > 0 && (
+              <ul className="space-y-2">
+                {recommendedArticles.map((recommended) => (
+                  <li key={`${recommended.url}-${recommended.title}`} className="rounded border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <a
+                          href={recommended.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block truncate text-sm font-semibold text-blue-700 hover:underline"
+                        >
+                          {recommended.title}
+                        </a>
+                        <p className="text-xs text-slate-500">추천 점수: {recommended.score}점</p>
+                        <p className="text-sm text-slate-700">{recommended.reason}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAddRecommendedArticle(recommended)}
+                        className="shrink-0 rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        선택에 추가
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="mt-4 space-y-3 rounded-lg border bg-white p-4 shadow-sm">
