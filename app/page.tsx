@@ -85,8 +85,134 @@ const DEFAULT_RSS_SOURCES: SavedRssSource[] = [
   {
     id: 'default-marketwatch-top-stories',
     name: 'MarketWatch Top Stories',
+    url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories',
+    description: '미국 주식시장, 경제, 기업 뉴스 주요 흐름',
+    category: '미국주식',
+  },
+  {
+    id: 'default-marketwatch-top-stories-alt',
+    name: 'MarketWatch Top Stories Alternative',
     url: 'https://www.marketwatch.com/rss/topstories',
-    description: '미국 주식과 경제 주요 뉴스 수집용',
+    description: 'MarketWatch 주요 뉴스 대체 RSS',
+    category: '미국주식',
+  },
+  {
+    id: 'default-investing-stock-markets',
+    name: 'Investing.com Stock Markets',
+    url: 'https://www.investing.com/rss/stock.rss',
+    description: '글로벌 주식시장 뉴스와 분석',
+    category: '미국주식',
+  },
+  {
+    id: 'default-investing-stock-analysis',
+    name: 'Investing.com Stock Analysis',
+    url: 'https://www.investing.com/rss/stock_Stocks.rss',
+    description: '개별 주식 분석과 시장 해설',
+    category: '미국주식',
+  },
+  {
+    id: 'default-investing-etfs',
+    name: 'Investing.com ETFs',
+    url: 'https://www.investing.com/rss/stock_ETFs.rss',
+    description: 'ETF 관련 뉴스와 분석',
+    category: 'ETF',
+  },
+  {
+    id: 'default-fed-press-releases',
+    name: 'Federal Reserve Press Releases',
+    url: 'https://www.federalreserve.gov/feeds/press_all.xml',
+    description: '연준 공식 보도자료 전체',
+    category: '미국경제',
+  },
+  {
+    id: 'default-fed-monetary-policy',
+    name: 'Federal Reserve Monetary Policy',
+    url: 'https://www.federalreserve.gov/feeds/press_monetary.xml',
+    description: '연준 통화정책 관련 공식 발표',
+    category: '미국경제',
+  },
+  {
+    id: 'default-sec-press-releases',
+    name: 'SEC Press Releases',
+    url: 'https://www.sec.gov/news/pressreleases.rss',
+    description: 'SEC 공식 보도자료, 규제, 소송, 공시 관련 이슈',
+    category: '미국공시',
+  },
+  {
+    id: 'default-sec-latest-10k',
+    name: 'SEC Latest 10-K Filings',
+    url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=10-K&company=&dateb=&owner=include&start=0&count=40&output=atom',
+    description: '최신 10-K 연간보고서 공시',
+    category: '미국공시',
+  },
+  {
+    id: 'default-sec-latest-10q',
+    name: 'SEC Latest 10-Q Filings',
+    url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=10-Q&company=&dateb=&owner=include&start=0&count=40&output=atom',
+    description: '최신 10-Q 분기보고서 공시',
+    category: '미국공시',
+  },
+  {
+    id: 'default-bls-employment-situation',
+    name: 'BLS Employment Situation',
+    url: 'https://www.bls.gov/feed/empsit.rss',
+    description: '미국 고용보고서, 실업률, 비농업 고용',
+    category: '미국경제',
+  },
+  {
+    id: 'default-bls-cpi',
+    name: 'BLS CPI',
+    url: 'https://www.bls.gov/feed/cpi.rss',
+    description: '소비자물가지수 CPI 공식 발표',
+    category: '미국경제',
+  },
+  {
+    id: 'default-bls-ppi',
+    name: 'BLS PPI',
+    url: 'https://www.bls.gov/feed/ppi.rss',
+    description: '생산자물가지수 PPI 공식 발표',
+    category: '미국경제',
+  },
+  {
+    id: 'default-bea-news-releases',
+    name: 'BEA News Releases',
+    url: 'https://apps.bea.gov/rss/rss.xml',
+    description: 'GDP, PCE, 개인소득, 소비지출 등 BEA 공식 발표',
+    category: '미국경제',
+  },
+  {
+    id: 'default-treasury-offering-announcements',
+    name: 'Treasury Offering Announcements',
+    url: 'https://www.treasurydirect.gov/TA_WS/securities/announced/rss',
+    description: '미국 국채 발행 공고',
+    category: '미국채',
+  },
+  {
+    id: 'default-treasury-auction-results',
+    name: 'Treasury Auction Results',
+    url: 'https://www.treasurydirect.gov/TA_WS/securities/auctioned/rss',
+    description: '미국 국채 입찰 결과',
+    category: '미국채',
+  },
+  {
+    id: 'default-nasdaq-trader-current-news',
+    name: 'Nasdaq Trader Current News',
+    url: 'https://www.nasdaqtrader.com/rss.aspx?categorylist=0&feed=currentheadlines',
+    description: '나스닥 트레이더 최신 뉴스 알림',
+    category: '미국주식',
+  },
+  {
+    id: 'default-nasdaq-trader-equity-alerts',
+    name: 'Nasdaq Trader Equity Alerts',
+    url: 'https://www.nasdaqtrader.com/rss.aspx?categorylist=2%2C6%2C7&feed=currentheadlines',
+    description: '주식 관련 거래소 알림',
+    category: '미국주식',
+  },
+  {
+    id: 'default-nasdaq-trade-halts',
+    name: 'Nasdaq Trade Halts',
+    url: 'https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts',
+    description: '나스닥 및 미국 거래소 상장 종목 거래정지 정보',
     category: '미국주식',
   },
   {
@@ -103,20 +229,74 @@ const DEFAULT_RSS_SOURCES: SavedRssSource[] = [
     description: 'IT, 플랫폼, 제품, AI 트렌드 수집용',
     category: '기술',
   },
-  {
-    id: 'default-fed-press-releases',
-    name: 'Federal Reserve Press Releases',
-    url: 'https://www.federalreserve.gov/feeds/press_all.xml',
-    description: '연준 보도자료와 금리 정책 이슈 수집용',
-    category: '미국경제',
-  },
 ];
 
 const SOURCE_SET_CONFIGS = [
   {
-    key: 'us_stock',
-    label: '미국 주식 세트',
-    keywords: ['미국주식', '미국경제', '경제', 'marketwatch', 'investing', 'federal reserve', 'sec'],
+    key: 'us_stock_core',
+    label: '미국 주식 핵심 세트',
+    keywords: [
+      'marketwatch top stories',
+      'investing.com stock markets',
+      'federal reserve press releases',
+      'federal reserve monetary policy',
+      'sec press releases',
+      'bls cpi',
+      'bls employment situation',
+      'bea news releases',
+    ],
+  },
+  {
+    key: 'us_macro',
+    label: '미국 거시경제 세트',
+    keywords: [
+      'federal reserve press releases',
+      'federal reserve monetary policy',
+      'bls cpi',
+      'bls ppi',
+      'bls employment situation',
+      'bea news releases',
+      'treasury offering announcements',
+      'treasury auction results',
+    ],
+  },
+  {
+    key: 'us_disclosure_regulation',
+    label: '미국 공시/규제 세트',
+    keywords: [
+      'sec press releases',
+      'sec latest 10-k filings',
+      'sec latest 10-q filings',
+      'nasdaq trader current news',
+      'nasdaq trader equity alerts',
+      'nasdaq trade halts',
+      'sec',
+      'nasdaq',
+      '공시',
+      '규제',
+      '소송',
+    ],
+  },
+  {
+    key: 'us_market_risk',
+    label: '미국 시장 리스크 세트',
+    keywords: [
+      'marketwatch top stories',
+      'sec press releases',
+      'nasdaq trade halts',
+      'nasdaq trader equity alerts',
+      'treasury auction results',
+      'sec',
+      'nasdaq',
+      'trade halt',
+      '거래정지',
+      'treasury',
+      '국채',
+      '리스크',
+      '규제',
+      '소송',
+      '공시',
+    ],
   },
   {
     key: 'tech_ai',
@@ -137,16 +317,50 @@ const SOURCE_SET_CONFIGS = [
 
 const PRESET_SOURCE_RECOMMENDATIONS: Record<string, { message: string; keywords: string[] }> = {
   '미국 주식 리포트': {
-    message: '미국 주식 리포트에는 미국 주식 세트를 추천합니다.',
-    keywords: ['미국주식', '미국경제', '경제', 'marketwatch', 'investing', 'federal reserve', 'sec'],
+    message: '미국 주식 리포트에는 미국 주식 핵심 세트를 추천합니다.',
+    keywords: [
+      '미국주식',
+      '미국경제',
+      '경제',
+      'marketwatch',
+      'investing',
+      'federal reserve',
+      'fed',
+      'sec',
+      'bls',
+      'bea',
+      'treasury',
+      'nasdaq',
+      'cpi',
+      'ppi',
+      '고용',
+      '금리',
+      '공시',
+      '거래정지',
+    ],
   },
   '한국 정치 이슈 정리': {
     message: '한국 정치 이슈에는 한국 뉴스 세트를 추천합니다.',
     keywords: ['한국', '정치', '뉴스', '경향', '한겨레', '연합뉴스'],
   },
   '경제 뉴스 쉽게 설명': {
-    message: '경제 뉴스에는 미국 주식/경제 세트를 추천합니다.',
-    keywords: ['경제', '미국경제', '미국주식', 'marketwatch', 'investing', 'federal reserve'],
+    message: '경제 뉴스에는 미국 거시경제 세트를 추천합니다.',
+    keywords: [
+      '경제',
+      '미국경제',
+      'federal reserve',
+      'fed',
+      'bls',
+      'bea',
+      'treasury',
+      'cpi',
+      'ppi',
+      '고용',
+      '물가',
+      'gdp',
+      'pce',
+      '금리',
+    ],
   },
   '5줄 핵심 요약': {
     message: '전체 뉴스 또는 글로벌 뉴스 세트를 추천합니다.',
@@ -156,6 +370,25 @@ const PRESET_SOURCE_RECOMMENDATIONS: Record<string, { message: string; keywords:
     message: '글로벌 뉴스 또는 한국 뉴스 세트를 추천합니다.',
     keywords: ['국제', '글로벌', '한국', '정치', '뉴스', 'bbc', 'world'],
   },
+};
+
+const normalizeSourceUrl = (value: string) => value.trim().toLowerCase();
+
+const mergeSourcesByUrl = (primarySources: SavedRssSource[], additionalSources: SavedRssSource[]) => {
+  const merged = [...primarySources];
+  const existingUrls = new Set(merged.map((source) => normalizeSourceUrl(source.url)));
+
+  for (const source of additionalSources) {
+    const normalizedUrl = normalizeSourceUrl(source.url);
+    if (!normalizedUrl || existingUrls.has(normalizedUrl)) {
+      continue;
+    }
+
+    merged.push(source);
+    existingUrls.add(normalizedUrl);
+  }
+
+  return merged;
 };
 
 export default function HomePage() {
@@ -219,6 +452,7 @@ export default function HomePage() {
     try {
       const raw = localStorage.getItem(RSS_SOURCES_STORAGE_KEY);
       if (!raw) {
+        setSavedSources(DEFAULT_RSS_SOURCES);
         setSourceStorageReady(true);
         return;
       }
@@ -261,11 +495,12 @@ export default function HomePage() {
         })
         .filter((item): item is SavedRssSource => Boolean(item));
 
-      if (normalized.length > 0) {
-        setSavedSources(normalized);
-      }
+      const uniqueSavedSources = mergeSourcesByUrl([], normalized);
+      const mergedSources = mergeSourcesByUrl(uniqueSavedSources, DEFAULT_RSS_SOURCES);
+      setSavedSources(mergedSources.length > 0 ? mergedSources : DEFAULT_RSS_SOURCES);
     } catch {
       // Ignore localStorage parse errors and keep defaults.
+      setSavedSources(DEFAULT_RSS_SOURCES);
     } finally {
       setSourceStorageReady(true);
     }
@@ -510,8 +745,9 @@ export default function HomePage() {
       return;
     }
 
+    const normalizedNextUrl = normalizeSourceUrl(nextUrl);
     const alreadyExists = savedSources.some(
-      (source) => source.url.toLowerCase() === nextUrl.toLowerCase(),
+      (source) => normalizeSourceUrl(source.url) === normalizedNextUrl,
     );
     if (alreadyExists) {
       setSourceSaveError('이미 저장된 RSS URL입니다.');
@@ -550,7 +786,7 @@ export default function HomePage() {
     const loweredKeywords = keywords.map((keyword) => keyword.toLowerCase());
     return savedSources
       .filter((source) => {
-        const target = `${source.category} ${source.name} ${source.description}`.toLowerCase();
+        const target = `${source.category} ${source.name} ${source.description} ${source.url}`.toLowerCase();
         return loweredKeywords.some((keyword) => target.includes(keyword));
       })
       .map((source) => source.id);
