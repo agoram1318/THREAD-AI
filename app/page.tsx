@@ -51,6 +51,7 @@ type SavedThreadDraft = {
 type SavedDraftStatusFilter = 'all' | 'draft' | 'ready' | 'used';
 type SavedDraftSortOption = 'latest' | 'oldest';
 type ManagementTab = 'dashboard' | 'saved' | 'ready';
+type MainTab = 'auto' | 'manual' | 'sources' | 'drafts';
 
 const PRESET_OPTIONS = [
   '미국 주식 리포트',
@@ -196,6 +197,7 @@ export default function HomePage() {
   const [savedDraftSort, setSavedDraftSort] = useState<SavedDraftSortOption>('latest');
   const [readyCombinedText, setReadyCombinedText] = useState('');
   const [managementTab, setManagementTab] = useState<ManagementTab>('dashboard');
+  const [mainTab, setMainTab] = useState<MainTab>('auto');
   const [autoWorkflowRunning, setAutoWorkflowRunning] = useState(false);
   const [autoWorkflowStep, setAutoWorkflowStep] = useState('');
   const [autoWorkflowLogs, setAutoWorkflowLogs] = useState<AutoWorkflowLog[]>([]);
@@ -1370,6 +1372,9 @@ export default function HomePage() {
       const normalizedB = Number.isNaN(timeB) ? 0 : timeB;
       return savedDraftSort === 'latest' ? normalizedB - normalizedA : normalizedA - normalizedB;
     });
+  const checkedSourceNames = savedSources
+    .filter((source) => checkedSourceIds.includes(source.id))
+    .map((source) => source.name);
 
   return (
     <main className="min-h-screen bg-slate-50 py-8">
@@ -1379,7 +1384,7 @@ export default function HomePage() {
             <div className="space-y-1">
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900">THREAD-AI</h1>
               <p className="text-sm text-slate-500">
-                RSS에서 좋은 기사를 고르고, Threads 초안을 빠르게 생성하세요.
+                프리셋을 고르면 좋은 기사를 찾아 Threads 초안을 자동으로 생성합니다.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1405,16 +1410,190 @@ export default function HomePage() {
           </div>
         </header>
 
+        <nav className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <button
+              type="button"
+              onClick={() => setMainTab('auto')}
+              className={`h-10 rounded-xl px-4 py-2 text-sm font-medium ${
+                mainTab === 'auto'
+                  ? 'bg-blue-600 text-white'
+                  : 'border border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              자동 생성
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab('manual')}
+              className={`h-10 rounded-xl px-4 py-2 text-sm font-medium ${
+                mainTab === 'manual'
+                  ? 'bg-blue-600 text-white'
+                  : 'border border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              수동 편집
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab('sources')}
+              className={`h-10 rounded-xl px-4 py-2 text-sm font-medium ${
+                mainTab === 'sources'
+                  ? 'bg-blue-600 text-white'
+                  : 'border border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              소스 관리
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab('drafts')}
+              className={`h-10 rounded-xl px-4 py-2 text-sm font-medium ${
+                mainTab === 'drafts'
+                  ? 'bg-blue-600 text-white'
+                  : 'border border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              초안 관리
+            </button>
+          </div>
+        </nav>
+
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm">
             {error}
           </div>
         )}
 
-        <section className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        {mainTab === 'sources' && (
+          <section className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">소스 관리</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                RSS 소스를 추가/삭제하고 추천 소스 세트 및 프리셋별 매칭 기준을 확인하세요.
+              </p>
+            </div>
+
+            {savedSources.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                저장된 RSS 소스가 없습니다. 아래에서 새 소스를 추가해주세요.
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {savedSources.map((source) => (
+                  <li key={`source-list-${source.id}`} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-sm font-semibold text-slate-900">{source.name}</p>
+                        <p className="text-xs text-slate-500">카테고리: {source.category}</p>
+                        <p className="text-sm text-slate-600">{source.description || '설명 없음'}</p>
+                        <p className="truncate text-xs text-slate-500">{source.url}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSavedSource(source.id)}
+                        className="h-9 rounded-xl border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <form onSubmit={handleSaveRssSource} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-700">RSS 소스 추가</p>
+              <div className="grid gap-2 md:grid-cols-2">
+                <input
+                  type="text"
+                  value={sourceName}
+                  onChange={(e) => setSourceName(e.target.value)}
+                  placeholder="소스 이름"
+                  className="h-11 rounded-xl border border-slate-300 px-3 text-sm outline-none ring-blue-500 focus:ring"
+                />
+                <input
+                  type="url"
+                  value={sourceUrl}
+                  onChange={(e) => setSourceUrl(e.target.value)}
+                  placeholder="RSS URL"
+                  className="h-11 rounded-xl border border-slate-300 px-3 text-sm outline-none ring-blue-500 focus:ring"
+                />
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                <input
+                  type="text"
+                  value={sourceDescription}
+                  onChange={(e) => setSourceDescription(e.target.value)}
+                  placeholder="간단한 설명"
+                  className="h-11 rounded-xl border border-slate-300 px-3 text-sm outline-none ring-blue-500 focus:ring"
+                />
+                <input
+                  type="text"
+                  value={sourceCategory}
+                  onChange={(e) => setSourceCategory(e.target.value)}
+                  placeholder="카테고리"
+                  className="h-11 rounded-xl border border-slate-300 px-3 text-sm outline-none ring-blue-500 focus:ring"
+                />
+              </div>
+              <button
+                type="submit"
+                className="h-10 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                저장하기
+              </button>
+            </form>
+
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-700">추천 소스 세트</p>
+              <div className="flex flex-wrap gap-2">
+                {SOURCE_SET_CONFIGS.map((sourceSet) => (
+                  <button
+                    key={`sources-tab-set-${sourceSet.key}`}
+                    type="button"
+                    onClick={() => handleApplySourceSet(sourceSet.key)}
+                    className="h-9 rounded-xl border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    {sourceSet.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-700">프리셋별 소스 매칭 기준 안내</p>
+              <ul className="space-y-2">
+                {Object.entries(PRESET_SOURCE_RECOMMENDATIONS).map(([preset, recommendation]) => (
+                  <li key={`preset-source-guide-${preset}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-sm font-semibold text-slate-800">{preset}</p>
+                    <p className="mt-1 text-xs text-slate-600">{recommendation.message}</p>
+                    <p className="mt-1 text-xs text-slate-500">매칭 키워드: {recommendation.keywords.join(', ')}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {sourceSaveError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-sm text-red-700">{sourceSaveError}</div>
+            )}
+            {!sourceSaveError && sourceSaveMessage && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-2 text-sm text-green-700">
+                {sourceSaveMessage}
+              </div>
+            )}
+          </section>
+        )}
+
+        <section
+          className={`space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${
+            mainTab === 'manual' ? '' : 'hidden'
+          }`}
+        >
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">1단계: RSS 소스 선택</h2>
-            <p className="mt-1 text-sm text-slate-500">소스를 고르고 여러 RSS를 수집할 수 있습니다.</p>
+            <h2 className="text-lg font-semibold text-slate-900">수동 편집</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              RSS URL 직접 입력과 저장 소스 선택으로 수집 대상을 직접 조정합니다.
+            </p>
           </div>
 
           <div className="space-y-3 rounded-xl border border-slate-200 p-4">
@@ -1642,10 +1821,16 @@ export default function HomePage() {
           </form>
         </section>
 
-        <section className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section
+          className={`space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${
+            mainTab === 'manual' ? '' : 'hidden'
+          }`}
+        >
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">2단계: 기사 선택</h2>
-            <p className="mt-1 text-sm text-slate-500">수집 기사에서 필요한 기사만 고르고 추천을 받아보세요.</p>
+            <h2 className="text-lg font-semibold text-slate-900">수동 편집</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              자동 결과가 아쉬울 때 기사 수집/선택/추천을 수동으로 조정합니다.
+            </p>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
@@ -1814,10 +1999,17 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section ref={draftSectionRef} className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section
+          ref={draftSectionRef}
+          className={`space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${
+            mainTab === 'auto' ? '' : 'hidden'
+          }`}
+        >
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">3단계: 쓰레드 초안 생성</h2>
-            <p className="mt-1 text-sm text-slate-500">프리셋을 선택하고 자동/수동으로 초안을 생성하세요.</p>
+            <h2 className="text-lg font-semibold text-slate-900">자동 생성</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              프리셋 선택부터 자동 생성, 초안 확인, 복사/저장을 한 화면에서 완료하세요.
+            </p>
           </div>
 
           <div className="space-y-3 rounded-xl border border-slate-200 p-4">
@@ -1839,6 +2031,37 @@ export default function HomePage() {
               ))}
             </select>
             {!selectedPreset && <p className="text-sm text-slate-500">프리셋을 먼저 선택해주세요.</p>}
+            {presetSourceRecommendation ? (
+              <div className="flex flex-col gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 md:flex-row md:items-center md:justify-between">
+                <p className="text-sm text-blue-800">{presetSourceRecommendation.message}</p>
+                <button
+                  type="button"
+                  onClick={handleApplyPresetRecommendation}
+                  className="h-9 rounded-xl border border-blue-200 bg-white px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                >
+                  추천 소스 자동 선택
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">프리셋을 선택하면 추천 소스 안내가 표시됩니다.</p>
+            )}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-1 text-xs font-medium text-slate-500">자동 선택된 소스 요약</p>
+              {checkedSourceNames.length === 0 ? (
+                <p className="text-sm text-slate-500">선택된 소스가 없습니다.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {checkedSourceNames.slice(0, 5).map((sourceName) => (
+                    <li key={`auto-source-${sourceName}`} className="text-sm text-slate-700">
+                      - {sourceName}
+                    </li>
+                  ))}
+                  {checkedSourceNames.length > 5 && (
+                    <li className="text-xs text-slate-500">외 {checkedSourceNames.length - 5}개</li>
+                  )}
+                </ul>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -1875,6 +2098,24 @@ export default function HomePage() {
                   </ul>
                 )}
               </div>
+            )}
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-medium text-slate-700">자동 선택된 기사 요약</p>
+            {selectedItems.length === 0 ? (
+              <p className="text-sm text-slate-500">선택된 기사가 없습니다.</p>
+            ) : (
+              <ul className="space-y-1">
+                {selectedItems.slice(0, 5).map((item) => (
+                  <li key={`auto-selected-item-${item.link}`} className="text-sm text-slate-700">
+                    - {item.title || '(제목 없음)'}
+                  </li>
+                ))}
+                {selectedItems.length > 5 && (
+                  <li className="text-xs text-slate-500">외 {selectedItems.length - 5}개</li>
+                )}
+              </ul>
             )}
           </div>
 
@@ -1942,10 +2183,16 @@ export default function HomePage() {
           )}
         </section>
 
-        <section className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section
+          className={`space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${
+            mainTab === 'drafts' ? '' : 'hidden'
+          }`}
+        >
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">4단계: 초안 관리</h2>
-            <p className="mt-1 text-sm text-slate-500">저장된 초안 현황을 확인하고 발행 전 검수/내보내기를 진행하세요.</p>
+            <h2 className="text-lg font-semibold text-slate-900">초안 관리</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              저장된 초안의 통계, 검수, 발행 대기함, 내보내기를 관리합니다.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
