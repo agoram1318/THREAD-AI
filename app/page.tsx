@@ -39,6 +39,15 @@ type AutoWorkflowLog = {
   message: string;
 };
 
+type SavedThreadDraft = {
+  id: string;
+  content: string;
+  selectedPreset: string;
+  createdAt: string;
+  sourceArticles: Array<{ title: string; link: string; sourceName?: string }>;
+  status: 'draft' | 'used';
+};
+
 const PRESET_OPTIONS = [
   '미국 주식 리포트',
   '한국 정치 이슈 정리',
@@ -48,6 +57,7 @@ const PRESET_OPTIONS = [
 ];
 
 const RSS_SOURCES_STORAGE_KEY = 'thread-ai-rss-sources-v1';
+const THREAD_DRAFTS_STORAGE_KEY = 'thread-ai-saved-drafts-v1';
 
 const DEFAULT_RSS_SOURCES: SavedRssSource[] = [
   {
@@ -162,6 +172,9 @@ export default function HomePage() {
   const [rewriteError, setRewriteError] = useState('');
   const [rewriteVersions, setRewriteVersions] = useState<string[]>([]);
   const [multiCollectWarning, setMultiCollectWarning] = useState('');
+  const [savedDrafts, setSavedDrafts] = useState<SavedThreadDraft[]>([]);
+  const [draftStorageReady, setDraftStorageReady] = useState(false);
+  const [draftLibraryMessage, setDraftLibraryMessage] = useState('');
   const [autoWorkflowRunning, setAutoWorkflowRunning] = useState(false);
   const [autoWorkflowStep, setAutoWorkflowStep] = useState('');
   const [autoWorkflowLogs, setAutoWorkflowLogs] = useState<AutoWorkflowLog[]>([]);
@@ -246,6 +259,95 @@ export default function HomePage() {
       // Ignore storage write errors.
     }
   }, [savedSources, sourceStorageReady]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(THREAD_DRAFTS_STORAGE_KEY);
+      if (!raw) {
+        setDraftStorageReady(true);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        setDraftStorageReady(true);
+        return;
+      }
+
+      const normalized = parsed
+        .map((item) => {
+          if (!item || typeof item !== 'object') {
+            return null;
+          }
+
+          const candidate = item as {
+            id?: unknown;
+            content?: unknown;
+            selectedPreset?: unknown;
+            createdAt?: unknown;
+            sourceArticles?: unknown;
+            status?: unknown;
+          };
+
+          const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+          const content = typeof candidate.content === 'string' ? candidate.content.trim() : '';
+          const selectedPreset =
+            typeof candidate.selectedPreset === 'string' ? candidate.selectedPreset.trim() : '';
+          const createdAt = typeof candidate.createdAt === 'string' ? candidate.createdAt : '';
+          const status = candidate.status === 'used' ? 'used' : 'draft';
+          const sourceArticles: SavedThreadDraft['sourceArticles'] = [];
+          if (Array.isArray(candidate.sourceArticles)) {
+            for (const sourceArticle of candidate.sourceArticles) {
+              if (!sourceArticle || typeof sourceArticle !== 'object') {
+                continue;
+              }
+
+              const sourceCandidate = sourceArticle as {
+                title?: unknown;
+                link?: unknown;
+                sourceName?: unknown;
+              };
+
+              const title = typeof sourceCandidate.title === 'string' ? sourceCandidate.title.trim() : '';
+              const link = typeof sourceCandidate.link === 'string' ? sourceCandidate.link.trim() : '';
+              const sourceNameValue =
+                typeof sourceCandidate.sourceName === 'string' ? sourceCandidate.sourceName.trim() : '';
+
+              if (!title && !link) {
+                continue;
+              }
+
+              sourceArticles.push({ title, link, sourceName: sourceNameValue || undefined });
+            }
+          }
+
+          if (!id || !content || !selectedPreset || !createdAt) {
+            return null;
+          }
+
+          return { id, content, selectedPreset, createdAt, sourceArticles, status };
+        })
+        .filter((item): item is SavedThreadDraft => Boolean(item));
+
+      setSavedDrafts(normalized);
+    } catch {
+      // Ignore parse errors.
+    } finally {
+      setDraftStorageReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!draftStorageReady) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(THREAD_DRAFTS_STORAGE_KEY, JSON.stringify(savedDrafts));
+    } catch {
+      // Ignore storage write errors.
+    }
+  }, [savedDrafts, draftStorageReady]);
 
   useEffect(() => {
     if (savedSources.length === 0) {
@@ -899,6 +1001,79 @@ export default function HomePage() {
     setRewriteError('');
   };
 
+  const formatDraftDate = (createdAt: string) => {
+    const parsedDate = new Date(createdAt);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return createdAt;
+    }
+    return parsedDate.toLocaleString('ko-KR');
+  };
+
+  const handleSaveCurrentDraft = () => {
+    const nextDraft = draft.trim();
+    if (!nextDraft) {
+      setDraftLibraryMessage('저장할 초안이 없습니다.');
+      return;
+    }
+
+    if (!selectedPreset) {
+      setDraftLibraryMessage('프리셋 정보가 없어 저장할 수 없습니다.');
+      return;
+    }
+
+    const savedDraft: SavedThreadDraft = {
+      id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      content: nextDraft,
+      selectedPreset,
+      createdAt: new Date().toISOString(),
+      sourceArticles: selectedItems.map((item) => ({
+        title: item.title || '(제목 없음)',
+        link: item.link,
+        sourceName: item.sourceName,
+      })),
+      status: 'draft',
+    };
+
+    setSavedDrafts((prev) => [savedDraft, ...prev]);
+    setDraftLibraryMessage('초안을 저장했습니다.');
+  };
+
+  const handleLoadSavedDraft = (savedDraft: SavedThreadDraft) => {
+    setDraft(savedDraft.content);
+    setSelectedPreset(savedDraft.selectedPreset);
+    setDraftError('');
+    setRewriteError('');
+    setRewriteVersions([]);
+    setCopySuccess(false);
+    setDraftLibraryMessage('저장된 초안을 불러왔습니다.');
+    setTimeout(() => {
+      draftSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
+
+  const handleCopySavedDraft = async (savedDraft: SavedThreadDraft) => {
+    try {
+      await navigator.clipboard.writeText(savedDraft.content);
+      setDraftLibraryMessage('저장된 초안을 복사했습니다.');
+    } catch {
+      setDraftLibraryMessage('저장된 초안 복사에 실패했습니다.');
+    }
+  };
+
+  const handleMarkSavedDraftUsed = (draftId: string) => {
+    setSavedDrafts((prev) =>
+      prev.map((savedDraft) =>
+        savedDraft.id === draftId ? { ...savedDraft, status: 'used' } : savedDraft,
+      ),
+    );
+    setDraftLibraryMessage('초안 상태를 사용완료로 변경했습니다.');
+  };
+
+  const handleDeleteSavedDraft = (draftId: string) => {
+    setSavedDrafts((prev) => prev.filter((savedDraft) => savedDraft.id !== draftId));
+    setDraftLibraryMessage('저장된 초안을 삭제했습니다.');
+  };
+
   const handleCopyDraft = async () => {
     if (!draft) {
       return;
@@ -1529,6 +1704,13 @@ export default function HomePage() {
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
+                      onClick={handleSaveCurrentDraft}
+                      className="h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      초안 저장
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleCopyDraft}
                       className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
                     >
@@ -1539,6 +1721,93 @@ export default function HomePage() {
                 </>
               )}
             </div>
+          )}
+        </section>
+
+        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">저장된 초안</h2>
+            <p className="mt-1 text-sm text-slate-500">생성한 초안을 저장하고 나중에 다시 불러올 수 있습니다.</p>
+          </div>
+
+          {draftLibraryMessage && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+              {draftLibraryMessage}
+            </div>
+          )}
+
+          {savedDrafts.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              아직 저장된 초안이 없습니다
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {savedDrafts.map((savedDraft) => (
+                <li key={savedDraft.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      {savedDraft.selectedPreset}
+                    </span>
+                    <span className="text-xs text-slate-500">{formatDraftDate(savedDraft.createdAt)}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        savedDraft.status === 'used'
+                          ? 'bg-green-50 text-green-700'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {savedDraft.status}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      사용 기사 {savedDraft.sourceArticles.length}개
+                    </span>
+                  </div>
+
+                  <p
+                    className="mb-3 text-sm text-slate-700"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {savedDraft.content}
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleLoadSavedDraft(savedDraft)}
+                      className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      불러오기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopySavedDraft(savedDraft)}
+                      className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      복사하기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMarkSavedDraftUsed(savedDraft.id)}
+                      className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      사용완료 표시
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSavedDraft(savedDraft.id)}
+                      className="h-9 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-600 hover:bg-red-100"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       </div>
