@@ -81,6 +81,29 @@ const DEFAULT_RSS_SOURCES: SavedRssSource[] = [
   },
 ];
 
+const SOURCE_SET_CONFIGS = [
+  {
+    key: 'us_stock',
+    label: '미국 주식 세트',
+    keywords: ['미국주식', '미국경제', '경제', 'marketwatch', 'investing', 'federal reserve', 'sec'],
+  },
+  {
+    key: 'tech_ai',
+    label: '기술/AI 세트',
+    keywords: ['기술', 'ai', 'technology', 'the verge', 'nytimes technology', 'ars technica'],
+  },
+  {
+    key: 'global_news',
+    label: '글로벌 뉴스 세트',
+    keywords: ['국제', '글로벌', 'bbc', 'world'],
+  },
+  {
+    key: 'korea_news',
+    label: '한국 뉴스 세트',
+    keywords: ['한국', '정치', '뉴스', '경향', '한겨레', '연합뉴스'],
+  },
+] as const;
+
 export default function HomePage() {
   const [url, setUrl] = useState('');
   const [savedSources, setSavedSources] = useState<SavedRssSource[]>(DEFAULT_RSS_SOURCES);
@@ -305,6 +328,37 @@ export default function HomePage() {
     setSavedSources((prev) => prev.filter((source) => source.id !== sourceId));
     setSourceSaveMessage('RSS 소스를 삭제했습니다.');
     setSourceSaveError('');
+  };
+
+  const handleApplySourceSet = (setKey: (typeof SOURCE_SET_CONFIGS)[number]['key']) => {
+    const config = SOURCE_SET_CONFIGS.find((item) => item.key === setKey);
+    if (!config) {
+      return;
+    }
+
+    const matchedSourceIds = savedSources
+      .filter((source) => {
+        const target = `${source.category} ${source.name} ${source.description}`.toLowerCase();
+        return config.keywords.some((keyword) => target.includes(keyword.toLowerCase()));
+      })
+      .map((source) => source.id);
+
+    setCheckedSourceIds(matchedSourceIds);
+
+    if (matchedSourceIds.length === 0) {
+      setSourceSaveError(`${config.label}에 맞는 RSS 소스를 찾지 못했습니다.`);
+      setSourceSaveMessage('');
+      return;
+    }
+
+    setSourceSaveError('');
+    setSourceSaveMessage(`${config.label} 적용: ${matchedSourceIds.length}개 소스를 선택했습니다.`);
+  };
+
+  const handleClearCheckedSources = () => {
+    setCheckedSourceIds([]);
+    setSourceSaveError('');
+    setSourceSaveMessage('선택한 RSS 소스를 모두 해제했습니다.');
   };
 
   const prepareCollection = () => {
@@ -742,6 +796,31 @@ export default function HomePage() {
                 선택한 소스: {selectedSource.name} · {selectedSource.description}
               </p>
             )}
+
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-slate-500">추천 소스 세트</p>
+                <button
+                  type="button"
+                  onClick={handleClearCheckedSources}
+                  className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                >
+                  전체 선택 해제
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {SOURCE_SET_CONFIGS.map((sourceSet) => (
+                  <button
+                    key={sourceSet.key}
+                    type="button"
+                    onClick={() => handleApplySourceSet(sourceSet.key)}
+                    className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    {sourceSet.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center justify-between">
