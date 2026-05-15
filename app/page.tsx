@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 
 type RssItem = {
   title: string;
@@ -32,6 +32,12 @@ type RewriteMode =
   | 'neutral'
   | 'threads_tone'
   | 'three_versions';
+
+type AutoWorkflowLog = {
+  step: string;
+  status: 'success' | 'error';
+  message: string;
+};
 
 const PRESET_OPTIONS = [
   '미국 주식 리포트',
@@ -128,6 +134,7 @@ const PRESET_SOURCE_RECOMMENDATIONS: Record<string, { message: string; keywords:
 };
 
 export default function HomePage() {
+  const draftSectionRef = useRef<HTMLDivElement | null>(null);
   const [url, setUrl] = useState('');
   const [savedSources, setSavedSources] = useState<SavedRssSource[]>(DEFAULT_RSS_SOURCES);
   const [selectedSourceId, setSelectedSourceId] = useState(DEFAULT_RSS_SOURCES[0]?.id ?? '');
@@ -155,6 +162,10 @@ export default function HomePage() {
   const [rewriteError, setRewriteError] = useState('');
   const [rewriteVersions, setRewriteVersions] = useState<string[]>([]);
   const [multiCollectWarning, setMultiCollectWarning] = useState('');
+  const [autoWorkflowRunning, setAutoWorkflowRunning] = useState(false);
+  const [autoWorkflowStep, setAutoWorkflowStep] = useState('');
+  const [autoWorkflowLogs, setAutoWorkflowLogs] = useState<AutoWorkflowLog[]>([]);
+  const [autoWorkflowError, setAutoWorkflowError] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const getItemKey = (item: RssItem, idx: number) => `${item.link}-${idx}`;
@@ -407,13 +418,16 @@ export default function HomePage() {
     setSourceSaveMessage('선택한 RSS 소스를 모두 해제했습니다.');
   };
 
-  const prepareCollection = () => {
+  const prepareCollection = (options?: { preservePreset?: boolean }) => {
+    const preservePreset = options?.preservePreset ?? false;
     setLoading(true);
     setError('');
     setMultiCollectWarning('');
     setItems([]);
     setSelectedItemKeys([]);
-    setSelectedPreset('');
+    if (!preservePreset) {
+      setSelectedPreset('');
+    }
     setRecommendedArticles([]);
     setRecommendError('');
     setRecommendLoading(false);
@@ -439,6 +453,119 @@ export default function HomePage() {
     }
 
     return data.items ?? [];
+  };
+
+  const collectItemsFromSources = async (sources: SavedRssSource[]) => {
+    const failedSourceNames: string[] = [];
+    const mergedItems: RssItem[] = [];
+
+    for (const source of sources) {
+      try {
+        const sourceItems = await fetchRssItems(source.url);
+        for (const item of sourceItems) {
+          mergedItems.push({ ...item, sourceName: source.name });
+        }
+      } catch {
+        failedSourceNames.push(source.name);
+      }
+    }
+
+    const dedupedItems: RssItem[] = [];
+    const seenLinks = new Set<string>();
+    for (const item of mergedItems) {
+      const normalizedLink = item.link?.trim() ?? '';
+      if (normalizedLink && seenLinks.has(normalizedLink)) {
+        continue;
+      }
+      if (normalizedLink) {
+        seenLinks.add(normalizedLink);
+      }
+      dedupedItems.push(item);
+    }
+
+    return { dedupedItems, failedSourceNames };
+  };
+
+  const requestRecommendedArticles = async (preset: string, targetItems: RssItem[]) => {
+    const res = await fetch('/api/recommend-articles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        preset,
+        items: targetItems.map((item) => ({
+          title: item.title,
+          link: item.link,
+          contentSnippet: item.contentSnippet,
+          pubDate: item.pubDate,
+        })),
+      }),
+    });
+
+    const data = (await res.json()) as {
+      recommendations?: RecommendedArticle[];
+      error?: string;
+    };
+
+    if (!res.ok) {
+      throw new Error(data.error ?? `기사 추천에 실패했습니다. (status: ${res.status})`);
+    }
+
+    const nextRecommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
+    if (nextRecommendations.length === 0) {
+      throw new Error('추천 결과가 비어 있습니다. 다시 시도해주세요.');
+    }
+
+    return nextRecommendations;
+  };
+
+  const findItemKeyFromItemsByRecommendation = (
+    targetItems: RssItem[],
+    recommended: RecommendedArticle,
+  ) => {
+    const indexByLink = targetItems.findIndex((item) => item.link === recommended.url);
+    if (indexByLink >= 0) {
+      return getItemKey(targetItems[indexByLink], indexByLink);
+    }
+
+    const indexByTitle = targetItems.findIndex((item) => item.title === recommended.title);
+    if (indexByTitle >= 0) {
+      return getItemKey(targetItems[indexByTitle], indexByTitle);
+    }
+
+    return null;
+  };
+
+  const requestGeneratedDraft = async (preset: string, targetItems: RssItem[]) => {
+    const res = await fetch('/api/generate-thread', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        preset,
+        items: targetItems.map((item) => ({
+          title: item.title,
+          link: item.link,
+          contentSnippet: item.contentSnippet,
+        })),
+      }),
+    });
+
+    let data: { draft?: string; error?: string } | null = null;
+    try {
+      data = (await res.json()) as { draft?: string; error?: string };
+    } catch {
+      data = null;
+    }
+
+    if (!res.ok) {
+      throw new Error(data?.error ?? `쓰레드 초안 생성에 실패했습니다. (status: ${res.status})`);
+    }
+
+    const nextDraft = data?.draft?.trim() ?? '';
+    if (!nextDraft) {
+      throw new Error('초안 생성 결과가 비어 있습니다. 다시 시도해주세요.');
+    }
+
+    return nextDraft;
   };
 
   const collectByUrl = async (nextUrl: string) => {
@@ -499,33 +626,7 @@ export default function HomePage() {
     setSourceSaveMessage(`선택한 소스 ${selectedSources.length}개를 순서대로 수집합니다.`);
     prepareCollection();
 
-    const failedSourceNames: string[] = [];
-    const mergedItems: RssItem[] = [];
-
-    for (const source of selectedSources) {
-      try {
-        const sourceItems = await fetchRssItems(source.url);
-        for (const item of sourceItems) {
-          mergedItems.push({ ...item, sourceName: source.name });
-        }
-      } catch {
-        failedSourceNames.push(source.name);
-      }
-    }
-
-    const dedupedItems: RssItem[] = [];
-    const seenLinks = new Set<string>();
-    for (const item of mergedItems) {
-      const normalizedLink = item.link?.trim() ?? '';
-      if (normalizedLink && seenLinks.has(normalizedLink)) {
-        continue;
-      }
-      if (normalizedLink) {
-        seenLinks.add(normalizedLink);
-      }
-      dedupedItems.push(item);
-    }
-
+    const { dedupedItems, failedSourceNames } = await collectItemsFromSources(selectedSources);
     setItems(dedupedItems);
 
     if (failedSourceNames.length > 0) {
@@ -570,34 +671,7 @@ export default function HomePage() {
     setRecommendError('');
 
     try {
-      const res = await fetch('/api/recommend-articles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          preset: selectedPreset,
-          items: items.map((item) => ({
-            title: item.title,
-            link: item.link,
-            contentSnippet: item.contentSnippet,
-            pubDate: item.pubDate,
-          })),
-        }),
-      });
-
-      const data = (await res.json()) as {
-        recommendations?: RecommendedArticle[];
-        error?: string;
-      };
-
-      if (!res.ok) {
-        throw new Error(data.error ?? `기사 추천에 실패했습니다. (status: ${res.status})`);
-      }
-
-      const nextRecommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
-      if (nextRecommendations.length === 0) {
-        throw new Error('추천 결과가 비어 있습니다. 다시 시도해주세요.');
-      }
-
+      const nextRecommendations = await requestRecommendedArticles(selectedPreset, items);
       setRecommendedArticles(nextRecommendations);
     } catch (err) {
       const message =
@@ -642,35 +716,7 @@ export default function HomePage() {
     setCopySuccess(false);
 
     try {
-      const res = await fetch('/api/generate-thread', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          preset: selectedPreset,
-          items: selectedItems.map((item) => ({
-            title: item.title,
-            link: item.link,
-            contentSnippet: item.contentSnippet,
-          })),
-        }),
-      });
-
-      let data: { draft?: string; error?: string } | null = null;
-      try {
-        data = (await res.json()) as { draft?: string; error?: string };
-      } catch {
-        data = null;
-      }
-
-      if (!res.ok) {
-        throw new Error(data?.error ?? `쓰레드 초안 생성에 실패했습니다. (status: ${res.status})`);
-      }
-
-      const nextDraft = data?.draft?.trim() ?? '';
-      if (!nextDraft) {
-        throw new Error('초안 생성 결과가 비어 있습니다. 다시 시도해주세요.');
-      }
-
+      const nextDraft = await requestGeneratedDraft(selectedPreset, selectedItems);
       setDraft(nextDraft);
     } catch (err) {
       const message =
@@ -682,6 +728,102 @@ export default function HomePage() {
       setError(message);
     } finally {
       setDraftLoading(false);
+    }
+  };
+
+  const handleRunAutoWorkflow = async () => {
+    if (!selectedPreset) {
+      setAutoWorkflowError('프리셋을 먼저 선택해주세요.');
+      return;
+    }
+
+    const recommendation = PRESET_SOURCE_RECOMMENDATIONS[selectedPreset];
+    if (!recommendation) {
+      setAutoWorkflowError('선택한 프리셋의 추천 소스 기준을 찾지 못했습니다.');
+      return;
+    }
+
+    const addWorkflowLog = (step: string, status: 'success' | 'error', message: string) => {
+      setAutoWorkflowLogs((prev) => [...prev, { step, status, message }]);
+    };
+
+    setAutoWorkflowRunning(true);
+    setAutoWorkflowStep('');
+    setAutoWorkflowLogs([]);
+    setAutoWorkflowError('');
+    setError('');
+
+    try {
+      setAutoWorkflowStep('소스 선택 중...');
+      const matchedSourceIds = matchSourceIdsByKeywords(recommendation.keywords);
+      setCheckedSourceIds(matchedSourceIds);
+      if (matchedSourceIds.length === 0) {
+        throw new Error('프리셋에 맞는 RSS 소스를 찾지 못했습니다.');
+      }
+      addWorkflowLog('1단계', 'success', `프리셋 추천 소스 ${matchedSourceIds.length}개 선택 완료`);
+
+      setAutoWorkflowStep('RSS 기사 수집 중...');
+      const matchedSources = savedSources.filter((source) => matchedSourceIds.includes(source.id));
+      prepareCollection({ preservePreset: true });
+      const { dedupedItems, failedSourceNames } = await collectItemsFromSources(matchedSources);
+      setItems(dedupedItems);
+      setLoading(false);
+
+      if (failedSourceNames.length > 0) {
+        setMultiCollectWarning(`일부 소스 수집 실패: ${failedSourceNames.join(', ')}`);
+        addWorkflowLog(
+          '2단계',
+          'success',
+          `기사 ${dedupedItems.length}개 수집 완료 (일부 실패: ${failedSourceNames.join(', ')})`,
+        );
+      } else {
+        addWorkflowLog('2단계', 'success', `기사 ${dedupedItems.length}개 수집 완료`);
+      }
+
+      if (dedupedItems.length === 0) {
+        throw new Error('수집된 기사가 없어 다음 단계를 진행할 수 없습니다.');
+      }
+
+      setAutoWorkflowStep('AI가 좋은 기사 분석 중...');
+      const nextRecommendations = await requestRecommendedArticles(selectedPreset, dedupedItems);
+      setRecommendedArticles(nextRecommendations);
+      setRecommendError('');
+      addWorkflowLog('3단계', 'success', `AI 추천 ${nextRecommendations.length}개 생성 완료`);
+
+      setAutoWorkflowStep('상위 기사 자동 선택 중...');
+      const topRecommendations = [...nextRecommendations].sort((a, b) => b.score - a.score).slice(0, 3);
+      const nextSelectedKeys = topRecommendations
+        .map((recommended) => findItemKeyFromItemsByRecommendation(dedupedItems, recommended))
+        .filter((itemKey): itemKey is string => Boolean(itemKey));
+      if (nextSelectedKeys.length === 0) {
+        throw new Error('추천 기사 자동 선택에 실패했습니다.');
+      }
+      setSelectedItemKeys(nextSelectedKeys);
+      addWorkflowLog('4단계', 'success', `상위 기사 ${nextSelectedKeys.length}개 자동 선택 완료`);
+
+      setAutoWorkflowStep('쓰레드 초안 생성 중...');
+      const selectedItemsForDraft = nextSelectedKeys
+        .map((itemKey) => dedupedItems.find((item, idx) => getItemKey(item, idx) === itemKey))
+        .filter((item): item is RssItem => Boolean(item));
+      const nextDraft = await requestGeneratedDraft(selectedPreset, selectedItemsForDraft);
+      setDraft(nextDraft);
+      setDraftError('');
+      setRewriteError('');
+      setRewriteVersions([]);
+      setCopySuccess(false);
+      addWorkflowLog('5단계', 'success', '쓰레드 초안 생성 완료');
+
+      setAutoWorkflowStep('자동 생성 완료');
+      setTimeout(() => {
+        draftSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '자동 생성 중 오류가 발생했습니다.';
+      setAutoWorkflowError(message);
+      setAutoWorkflowStep('자동 생성 중단');
+      addWorkflowLog('실패', 'error', message);
+    } finally {
+      setAutoWorkflowRunning(false);
     }
   };
 
@@ -1162,8 +1304,16 @@ export default function HomePage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
+                onClick={handleRunAutoWorkflow}
+                disabled={!selectedPreset || autoWorkflowRunning}
+                className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {autoWorkflowRunning ? '자동 생성 진행 중...' : '자동 생성 시작'}
+              </button>
+              <button
+                type="button"
                 onClick={handleRecommendArticles}
-                disabled={!canRecommendArticles || recommendLoading}
+                disabled={!canRecommendArticles || recommendLoading || autoWorkflowRunning}
                 className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
               >
                 AI 추천 받기
@@ -1171,12 +1321,40 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={handleAutoSelectTopRecommended}
-                disabled={recommendedArticles.length === 0}
+                disabled={recommendedArticles.length === 0 || autoWorkflowRunning}
                 className="h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
                 상위 3개 자동 선택
               </button>
             </div>
+            {!selectedPreset && (
+              <p className="text-sm text-slate-500">프리셋을 먼저 선택해주세요.</p>
+            )}
+
+            {(autoWorkflowRunning || autoWorkflowStep || autoWorkflowLogs.length > 0 || autoWorkflowError) && (
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                {autoWorkflowStep && (
+                  <p className="text-sm font-medium text-slate-700">진행 상태: {autoWorkflowStep}</p>
+                )}
+                {autoWorkflowError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+                    자동 생성 실패: {autoWorkflowError}
+                  </div>
+                )}
+                {autoWorkflowLogs.length > 0 && (
+                  <ul className="space-y-1">
+                    {autoWorkflowLogs.map((log, idx) => (
+                      <li
+                        key={`auto-workflow-log-${idx}`}
+                        className={`text-sm ${log.status === 'error' ? 'text-red-700' : 'text-slate-600'}`}
+                      >
+                        {log.step}: {log.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             {presetSourceRecommendation && (
               <div className="flex flex-col gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 md:flex-row md:items-center md:justify-between">
@@ -1229,7 +1407,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section ref={draftSectionRef} className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">4단계: 쓰레드 초안 생성</h2>
             <p className="mt-1 text-sm text-slate-500">초안을 생성하고 필요하면 바로 다듬어 사용하세요.</p>
