@@ -9,10 +9,19 @@ type RssItem = {
   contentSnippet: string;
 };
 
+const PRESET_OPTIONS = [
+  '미국 주식 리포트',
+  '한국 정치 이슈 정리',
+  '경제 뉴스 쉽게 설명',
+  '5줄 핵심 요약',
+  '질문 유도형 쓰레드',
+];
+
 export default function HomePage() {
   const [url, setUrl] = useState('');
   const [items, setItems] = useState<RssItem[]>([]);
   const [selectedItemKeys, setSelectedItemKeys] = useState<string[]>([]);
+  const [selectedPreset, setSelectedPreset] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const getItemKey = (item: RssItem, idx: number) => `${item.link}-${idx}`;
@@ -33,6 +42,7 @@ export default function HomePage() {
     setError('');
     setItems([]);
     setSelectedItemKeys([]);
+    setSelectedPreset('');
 
     try {
       const res = await fetch('/api/rss-test', {
@@ -151,6 +161,25 @@ export default function HomePage() {
                 })}
               </ul>
             )}
+          </section>
+
+          <section className="mt-4 space-y-3 rounded-lg border bg-white p-4 shadow-sm">
+            <h2 className="text-lg font-semibold">글 생성 프리셋 선택</h2>
+            <select
+              value={selectedPreset}
+              onChange={(e) => setSelectedPreset(e.target.value)}
+              className="w-full rounded border px-3 py-2 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
+            >
+              <option value="">프리셋 선택</option>
+              {PRESET_OPTIONS.map((preset) => (
+                <option key={preset} value={preset}>
+                  {preset}
+                </option>
+              ))}
+            </select>
+            <p className="text-sm text-slate-600">
+              선택된 프리셋: {selectedPreset || '프리셋을 선택해주세요'}
+            </p>
           </section>
         </>
       )}
