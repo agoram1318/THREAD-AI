@@ -22,9 +22,15 @@ export default function HomePage() {
   const [items, setItems] = useState<RssItem[]>([]);
   const [selectedItemKeys, setSelectedItemKeys] = useState<string[]>([]);
   const [selectedPreset, setSelectedPreset] = useState('');
+  const [draft, setDraft] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const getItemKey = (item: RssItem, idx: number) => `${item.link}-${idx}`;
+  const selectedItems = selectedItemKeys
+    .map((itemKey) => items.find((item, idx) => getItemKey(item, idx) === itemKey))
+    .filter((item): item is RssItem => Boolean(item));
+  const canGenerateDraft = selectedItems.length > 0 && Boolean(selectedPreset);
 
   const toggleItemSelection = (itemKey: string) => {
     setSelectedItemKeys((prev) =>
@@ -36,6 +42,57 @@ export default function HomePage() {
     setSelectedItemKeys((prev) => prev.filter((key) => key !== itemKey));
   };
 
+  const generateMockThreadDraft = (preset: string, selectedArticles: RssItem[]) => {
+    const sourceList = selectedArticles
+      .map((article, idx) => `${idx + 1}. ${article.title || '(제목 없음)'}`)
+      .join('\n');
+
+    const summaryList = selectedArticles
+      .slice(0, 3)
+      .map((article, idx) => `- 기사 ${idx + 1}: ${article.contentSnippet || '요약 없음'}`)
+      .join('\n');
+
+    return [
+      `후킹 문장`,
+      `${preset} 관점에서 지금 꼭 봐야 할 뉴스만 빠르게 정리했습니다.`,
+      ``,
+      `핵심 포인트 3개`,
+      summaryList || '- 선택된 기사 요약이 없습니다.',
+      ``,
+      `쉬운 해석`,
+      `복잡한 흐름을 한 줄로 보면, "${preset}"에 맞춰 중요한 맥락을 먼저 이해하면 다음 뉴스가 훨씬 쉽게 보입니다.`,
+      ``,
+      `질문형 마무리`,
+      `이 이슈에서 가장 먼저 더 파고들고 싶은 포인트는 무엇인가요?`,
+      ``,
+      `참고 출처 목록`,
+      sourceList || '- 출처 없음',
+    ].join('\n');
+  };
+
+  const handleGenerateDraft = () => {
+    if (!canGenerateDraft) {
+      return;
+    }
+
+    const nextDraft = generateMockThreadDraft(selectedPreset, selectedItems);
+    setDraft(nextDraft);
+    setCopySuccess(false);
+  };
+
+  const handleCopyDraft = async () => {
+    if (!draft) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(draft);
+      setCopySuccess(true);
+    } catch {
+      setCopySuccess(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -43,6 +100,8 @@ export default function HomePage() {
     setItems([]);
     setSelectedItemKeys([]);
     setSelectedPreset('');
+    setDraft('');
+    setCopySuccess(false);
 
     try {
       const res = await fetch('/api/rss-test', {
@@ -181,6 +240,44 @@ export default function HomePage() {
               선택된 프리셋: {selectedPreset || '프리셋을 선택해주세요'}
             </p>
           </section>
+
+          <section className="mt-4 space-y-3 rounded-lg border bg-white p-4 shadow-sm">
+            <h2 className="text-lg font-semibold">Threads 글 초안 생성</h2>
+            <button
+              type="button"
+              onClick={handleGenerateDraft}
+              disabled={!canGenerateDraft}
+              className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-60"
+            >
+              쓰레드 초안 생성
+            </button>
+            {!canGenerateDraft && (
+              <p className="text-sm text-slate-500">
+                {selectedItems.length === 0
+                  ? '기사를 1개 이상 선택해주세요.'
+                  : '프리셋을 선택해주세요.'}
+              </p>
+            )}
+          </section>
+
+          {draft && (
+            <section className="mt-4 space-y-3 rounded-lg border bg-white p-4 shadow-sm">
+              <h2 className="text-lg font-semibold">생성된 쓰레드 초안</h2>
+              <pre className="whitespace-pre-wrap rounded border bg-slate-50 p-3 text-sm text-slate-700">
+                {draft}
+              </pre>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleCopyDraft}
+                  className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  복사하기
+                </button>
+                {copySuccess && <span className="text-sm text-green-700">복사되었습니다</span>}
+              </div>
+            </section>
+          )}
         </>
       )}
     </main>
