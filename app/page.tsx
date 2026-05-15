@@ -23,6 +23,7 @@ export default function HomePage() {
   const [selectedItemKeys, setSelectedItemKeys] = useState<string[]>([]);
   const [selectedPreset, setSelectedPreset] = useState('');
   const [draft, setDraft] = useState('');
+  const [draftError, setDraftError] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
   const [error, setError] = useState('');
@@ -50,6 +51,8 @@ export default function HomePage() {
 
     setDraftLoading(true);
     setError('');
+    setDraftError('');
+    setDraft('');
     setCopySuccess(false);
 
     try {
@@ -66,20 +69,31 @@ export default function HomePage() {
         }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error ?? '쓰레드 초안 생성 중 오류가 발생했습니다.');
+      let data: { draft?: string; error?: string } | null = null;
+      try {
+        data = (await res.json()) as { draft?: string; error?: string };
+      } catch {
+        data = null;
       }
 
-      setDraft(data.draft ?? '');
+      if (!res.ok) {
+        throw new Error(data?.error ?? `쓰레드 초안 생성에 실패했습니다. (status: ${res.status})`);
+      }
+
+      const nextDraft = data?.draft?.trim() ?? '';
+      if (!nextDraft) {
+        throw new Error('초안 생성 결과가 비어 있습니다. 다시 시도해주세요.');
+      }
+
+      setDraft(nextDraft);
     } catch (err) {
-      setDraft('');
-      setError(
+      const message =
         err instanceof Error
           ? err.message
-          : '쓰레드 초안 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
-      );
+          : '쓰레드 초안 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+
+      setDraftError(message);
+      setError(message);
     } finally {
       setDraftLoading(false);
     }
@@ -106,6 +120,7 @@ export default function HomePage() {
     setSelectedItemKeys([]);
     setSelectedPreset('');
     setDraft('');
+    setDraftError('');
     setCopySuccess(false);
     setDraftLoading(false);
 
@@ -255,7 +270,7 @@ export default function HomePage() {
               disabled={!canGenerateDraft || draftLoading}
               className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-60"
             >
-              {draftLoading ? '초안 생성 중...' : '쓰레드 초안 생성'}
+              {draftLoading ? '생성 중...' : '쓰레드 초안 생성'}
             </button>
             {!canGenerateDraft && (
               <p className="text-sm text-slate-500">
@@ -266,22 +281,32 @@ export default function HomePage() {
             )}
           </section>
 
-          {draft && (
+          {(draft || draftError || draftLoading) && (
             <section className="mt-4 space-y-3 rounded-lg border bg-white p-4 shadow-sm">
               <h2 className="text-lg font-semibold">생성된 쓰레드 초안</h2>
-              <pre className="whitespace-pre-wrap rounded border bg-slate-50 p-3 text-sm text-slate-700">
-                {draft}
-              </pre>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleCopyDraft}
-                  className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  복사하기
-                </button>
-                {copySuccess && <span className="text-sm text-green-700">복사되었습니다</span>}
-              </div>
+              {draftLoading && <p className="text-sm text-slate-600">생성 중...</p>}
+              {!draftLoading && draftError && (
+                <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {draftError}
+                </div>
+              )}
+              {!draftLoading && draft && (
+                <>
+                  <pre className="whitespace-pre-wrap rounded border bg-slate-50 p-3 text-sm text-slate-700">
+                    {draft}
+                  </pre>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleCopyDraft}
+                      className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      복사하기
+                    </button>
+                    {copySuccess && <span className="text-sm text-green-700">복사되었습니다</span>}
+                  </div>
+                </>
+              )}
             </section>
           )}
         </>

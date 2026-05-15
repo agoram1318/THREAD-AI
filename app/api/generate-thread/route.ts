@@ -12,6 +12,22 @@ type GenerateThreadRequestBody = {
   items?: GenerateThreadRequestItem[];
 };
 
+const extractDraftText = (response: OpenAI.Responses.Response) => {
+  const primaryText = response.output_text?.trim();
+  if (primaryText) {
+    return primaryText;
+  }
+
+  const fallbackText = (response.output ?? [])
+    .flatMap((item) => item.content ?? [])
+    .filter((content): content is { type: 'output_text'; text: string } => content.type === 'output_text')
+    .map((content) => content.text)
+    .join('\n')
+    .trim();
+
+  return fallbackText;
+};
+
 const buildPrompt = (preset: string, items: GenerateThreadRequestItem[]) => {
   const articleList = items
     .map((item, idx) =>
@@ -64,6 +80,10 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as GenerateThreadRequestBody;
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: '요청 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
     const preset = body.preset?.trim();
     const items = (body.items ?? []).filter((item) => item.title || item.contentSnippet || item.link);
 
@@ -85,14 +105,21 @@ export async function POST(request: Request) {
       max_output_tokens: 1000,
     });
 
-    const draft = response.output_text?.trim();
+    const draft = extractDraftText(response);
 
     if (!draft) {
       return NextResponse.json({ error: '초안 생성 결과가 비어 있습니다.' }, { status: 500 });
     }
 
     return NextResponse.json({ draft });
-  } catch {
-    return NextResponse.json({ error: '쓰레드 초안 생성 중 오류가 발생했습니다.' }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('[generate-thread] API error:', error);
+
+    const message =
+      error instanceof Error && error.message
+        ? `쓰레드 초안 생성 중 오류가 발생했습니다: ${error.message}`
+        : '쓰레드 초안 생성 중 오류가 발생했습니다.';
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
