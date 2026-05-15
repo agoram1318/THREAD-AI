@@ -45,10 +45,10 @@ type SavedThreadDraft = {
   selectedPreset: string;
   createdAt: string;
   sourceArticles: Array<{ title: string; link: string; sourceName?: string }>;
-  status: 'draft' | 'used';
+  status: 'draft' | 'ready' | 'used';
 };
 
-type SavedDraftStatusFilter = 'all' | 'draft' | 'used';
+type SavedDraftStatusFilter = 'all' | 'draft' | 'ready' | 'used';
 type SavedDraftSortOption = 'latest' | 'oldest';
 
 const PRESET_OPTIONS = [
@@ -61,6 +61,16 @@ const PRESET_OPTIONS = [
 
 const RSS_SOURCES_STORAGE_KEY = 'thread-ai-rss-sources-v1';
 const THREAD_DRAFTS_STORAGE_KEY = 'thread-ai-saved-drafts-v1';
+const THREAD_DRAFT_CHECKLIST_STORAGE_KEY = 'thread-ai-draft-checklist-v1';
+const REVIEW_CHECKLIST_ITEMS = [
+  '출처 링크 확인',
+  '원문과 다른 사실 없는지 확인',
+  '과장/낚시성 표현 없는지 확인',
+  '투자 조언처럼 보이지 않는지 확인',
+  '정치/사회 이슈는 사실과 해석이 구분됐는지 확인',
+  '문장이 Threads에 맞게 짧고 읽기 쉬운지 확인',
+  '복사 후 실제 업로드 여부 확인',
+] as const;
 
 const DEFAULT_RSS_SOURCES: SavedRssSource[] = [
   {
@@ -176,6 +186,7 @@ export default function HomePage() {
   const [rewriteVersions, setRewriteVersions] = useState<string[]>([]);
   const [multiCollectWarning, setMultiCollectWarning] = useState('');
   const [savedDrafts, setSavedDrafts] = useState<SavedThreadDraft[]>([]);
+  const [draftChecklistById, setDraftChecklistById] = useState<Record<string, boolean[]>>({});
   const [draftStorageReady, setDraftStorageReady] = useState(false);
   const [draftLibraryMessage, setDraftLibraryMessage] = useState('');
   const [savedDraftSearch, setSavedDraftSearch] = useState('');
@@ -301,7 +312,7 @@ export default function HomePage() {
           const selectedPreset =
             typeof candidate.selectedPreset === 'string' ? candidate.selectedPreset.trim() : '';
           const createdAt = typeof candidate.createdAt === 'string' ? candidate.createdAt : '';
-          const status = candidate.status === 'used' ? 'used' : 'draft';
+          const status = candidate.status === 'used' ? 'used' : candidate.status === 'ready' ? 'ready' : 'draft';
           const sourceArticles: SavedThreadDraft['sourceArticles'] = [];
           if (Array.isArray(candidate.sourceArticles)) {
             for (const sourceArticle of candidate.sourceArticles) {
@@ -345,6 +356,41 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem(THREAD_DRAFT_CHECKLIST_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return;
+      }
+
+      const normalized: Record<string, boolean[]> = {};
+      for (const [draftId, value] of Object.entries(parsed)) {
+        if (!Array.isArray(value)) {
+          continue;
+        }
+
+        const checklist = value
+          .slice(0, REVIEW_CHECKLIST_ITEMS.length)
+          .map((item) => Boolean(item));
+
+        while (checklist.length < REVIEW_CHECKLIST_ITEMS.length) {
+          checklist.push(false);
+        }
+
+        normalized[draftId] = checklist;
+      }
+
+      setDraftChecklistById(normalized);
+    } catch {
+      // Ignore parse errors.
+    }
+  }, []);
+
+  useEffect(() => {
     if (!draftStorageReady) {
       return;
     }
@@ -355,6 +401,18 @@ export default function HomePage() {
       // Ignore storage write errors.
     }
   }, [savedDrafts, draftStorageReady]);
+
+  useEffect(() => {
+    if (!draftStorageReady) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(THREAD_DRAFT_CHECKLIST_STORAGE_KEY, JSON.stringify(draftChecklistById));
+    } catch {
+      // Ignore storage write errors.
+    }
+  }, [draftChecklistById, draftStorageReady]);
 
   useEffect(() => {
     if (savedSources.length === 0) {
@@ -1016,6 +1074,20 @@ export default function HomePage() {
     return parsedDate.toLocaleString('ko-KR');
   };
 
+  const getDraftChecklist = (draftId: string) => {
+    const checklist = draftChecklistById[draftId];
+    if (!Array.isArray(checklist)) {
+      return Array(REVIEW_CHECKLIST_ITEMS.length).fill(false) as boolean[];
+    }
+
+    const normalized = checklist.slice(0, REVIEW_CHECKLIST_ITEMS.length).map((item) => Boolean(item));
+    while (normalized.length < REVIEW_CHECKLIST_ITEMS.length) {
+      normalized.push(false);
+    }
+
+    return normalized;
+  };
+
   const handleSaveCurrentDraft = () => {
     const nextDraft = draft.trim();
     if (!nextDraft) {
@@ -1042,6 +1114,10 @@ export default function HomePage() {
     };
 
     setSavedDrafts((prev) => [savedDraft, ...prev]);
+    setDraftChecklistById((prev) => ({
+      ...prev,
+      [savedDraft.id]: Array(REVIEW_CHECKLIST_ITEMS.length).fill(false),
+    }));
     setDraftLibraryMessage('초안을 저장했습니다.');
   };
 
@@ -1076,8 +1152,35 @@ export default function HomePage() {
     setDraftLibraryMessage('초안 상태를 사용완료로 변경했습니다.');
   };
 
+  const handleToggleDraftChecklist = (draftId: string, checklistIndex: number) => {
+    const nextChecklist = (() => {
+      const currentChecklist = getDraftChecklist(draftId);
+      return currentChecklist.map((checked, idx) => (idx === checklistIndex ? !checked : checked));
+    })();
+
+    setDraftChecklistById((prev) => ({ ...prev, [draftId]: nextChecklist }));
+
+    const isAllChecked = nextChecklist.every(Boolean);
+    setSavedDrafts((prev) =>
+      prev.map((savedDraft) => {
+        if (savedDraft.id !== draftId) {
+          return savedDraft;
+        }
+        if (savedDraft.status === 'used') {
+          return savedDraft;
+        }
+        return { ...savedDraft, status: isAllChecked ? 'ready' : 'draft' };
+      }),
+    );
+  };
+
   const handleDeleteSavedDraft = (draftId: string) => {
     setSavedDrafts((prev) => prev.filter((savedDraft) => savedDraft.id !== draftId));
+    setDraftChecklistById((prev) => {
+      const next = { ...prev };
+      delete next[draftId];
+      return next;
+    });
     setDraftLibraryMessage('저장된 초안을 삭제했습니다.');
   };
 
@@ -1789,6 +1892,7 @@ export default function HomePage() {
             >
               <option value="all">상태: 전체</option>
               <option value="draft">상태: draft</option>
+              <option value="ready">상태: ready</option>
               <option value="used">상태: used</option>
             </select>
             <select
@@ -1824,7 +1928,7 @@ export default function HomePage() {
           ) : (
             <ul className="space-y-3">
               {filteredSavedDrafts.map((savedDraft) => (
-                <li key={savedDraft.id} className="rounded-xl border border-slate-200 p-4">
+                <li key={savedDraft.id} className="space-y-3 rounded-xl border border-slate-200 p-4">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
                       {savedDraft.selectedPreset}
@@ -1834,10 +1938,16 @@ export default function HomePage() {
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         savedDraft.status === 'used'
                           ? 'bg-green-50 text-green-700'
-                          : 'bg-slate-100 text-slate-600'
+                          : savedDraft.status === 'ready'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-slate-100 text-slate-600'
                       }`}
                     >
-                      {savedDraft.status}
+                      {savedDraft.status === 'draft'
+                        ? '초안'
+                        : savedDraft.status === 'ready'
+                          ? '발행 준비'
+                          : '사용완료'}
                     </span>
                     <span className="text-xs text-slate-500">
                       사용 기사 {savedDraft.sourceArticles.length}개
@@ -1885,6 +1995,47 @@ export default function HomePage() {
                     >
                       삭제
                     </button>
+                  </div>
+
+                  <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-slate-600">검수 체크리스트</p>
+                      {(() => {
+                        const checklist = getDraftChecklist(savedDraft.id);
+                        const completedCount = checklist.filter(Boolean).length;
+                        const allDone = completedCount === REVIEW_CHECKLIST_ITEMS.length;
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500">
+                              {completedCount}/{REVIEW_CHECKLIST_ITEMS.length} 완료
+                            </span>
+                            {allDone && (
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                발행 준비 완료
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <ul className="space-y-1">
+                      {REVIEW_CHECKLIST_ITEMS.map((checkItem, idx) => {
+                        const checklist = getDraftChecklist(savedDraft.id);
+                        return (
+                          <li key={`${savedDraft.id}-check-${idx}`} className="rounded-lg bg-white px-2 py-1.5">
+                            <label className="flex cursor-pointer items-start gap-2 text-xs text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={checklist[idx] ?? false}
+                                onChange={() => handleToggleDraftChecklist(savedDraft.id, idx)}
+                                className="mt-0.5 h-4 w-4 accent-blue-600"
+                              />
+                              <span>{checkItem}</span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </div>
                 </li>
               ))}
