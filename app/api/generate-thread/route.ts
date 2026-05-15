@@ -72,8 +72,7 @@ export async function POST(request: Request) {
     if (!apiKey) {
       return NextResponse.json(
         {
-          error:
-            'OpenAI API 키가 설정되지 않았습니다. .env.local에 OPENAI_API_KEY를 추가한 뒤 서버를 다시 시작해주세요.',
+          error: 'OPENAI_API_KEY가 설정되지 않았습니다. .env.local에 값을 추가한 뒤 서버를 다시 시작해주세요.',
         },
         { status: 500 },
       );
