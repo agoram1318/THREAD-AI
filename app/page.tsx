@@ -104,6 +104,29 @@ const SOURCE_SET_CONFIGS = [
   },
 ] as const;
 
+const PRESET_SOURCE_RECOMMENDATIONS: Record<string, { message: string; keywords: string[] }> = {
+  '미국 주식 리포트': {
+    message: '미국 주식 리포트에는 미국 주식 세트를 추천합니다.',
+    keywords: ['미국주식', '미국경제', '경제', 'marketwatch', 'investing', 'federal reserve', 'sec'],
+  },
+  '한국 정치 이슈 정리': {
+    message: '한국 정치 이슈에는 한국 뉴스 세트를 추천합니다.',
+    keywords: ['한국', '정치', '뉴스', '경향', '한겨레', '연합뉴스'],
+  },
+  '경제 뉴스 쉽게 설명': {
+    message: '경제 뉴스에는 미국 주식/경제 세트를 추천합니다.',
+    keywords: ['경제', '미국경제', '미국주식', 'marketwatch', 'investing', 'federal reserve'],
+  },
+  '5줄 핵심 요약': {
+    message: '전체 뉴스 또는 글로벌 뉴스 세트를 추천합니다.',
+    keywords: ['국제', '글로벌', 'bbc', 'world', '뉴스'],
+  },
+  '질문 유도형 쓰레드': {
+    message: '글로벌 뉴스 또는 한국 뉴스 세트를 추천합니다.',
+    keywords: ['국제', '글로벌', '한국', '정치', '뉴스', 'bbc', 'world'],
+  },
+};
+
 export default function HomePage() {
   const [url, setUrl] = useState('');
   const [savedSources, setSavedSources] = useState<SavedRssSource[]>(DEFAULT_RSS_SOURCES);
@@ -141,6 +164,9 @@ export default function HomePage() {
     .filter((item): item is RssItem => Boolean(item));
   const canGenerateDraft = selectedItems.length > 0 && Boolean(selectedPreset);
   const canRecommendArticles = items.length > 0 && Boolean(selectedPreset);
+  const presetSourceRecommendation = selectedPreset
+    ? PRESET_SOURCE_RECOMMENDATIONS[selectedPreset] ?? null
+    : null;
 
   useEffect(() => {
     try {
@@ -330,29 +356,49 @@ export default function HomePage() {
     setSourceSaveError('');
   };
 
-  const handleApplySourceSet = (setKey: (typeof SOURCE_SET_CONFIGS)[number]['key']) => {
-    const config = SOURCE_SET_CONFIGS.find((item) => item.key === setKey);
-    if (!config) {
-      return;
-    }
-
-    const matchedSourceIds = savedSources
+  const matchSourceIdsByKeywords = (keywords: readonly string[]) => {
+    const loweredKeywords = keywords.map((keyword) => keyword.toLowerCase());
+    return savedSources
       .filter((source) => {
         const target = `${source.category} ${source.name} ${source.description}`.toLowerCase();
-        return config.keywords.some((keyword) => target.includes(keyword.toLowerCase()));
+        return loweredKeywords.some((keyword) => target.includes(keyword));
       })
       .map((source) => source.id);
+  };
 
+  const applySourceSelectionByKeywords = (keywords: readonly string[], label: string) => {
+    const matchedSourceIds = matchSourceIdsByKeywords(keywords);
     setCheckedSourceIds(matchedSourceIds);
 
     if (matchedSourceIds.length === 0) {
-      setSourceSaveError(`${config.label}에 맞는 RSS 소스를 찾지 못했습니다.`);
+      setSourceSaveError(`${label}에 맞는 RSS 소스를 찾지 못했습니다.`);
       setSourceSaveMessage('');
       return;
     }
 
     setSourceSaveError('');
-    setSourceSaveMessage(`${config.label} 적용: ${matchedSourceIds.length}개 소스를 선택했습니다.`);
+    setSourceSaveMessage(`${label} 적용: ${matchedSourceIds.length}개 소스를 선택했습니다.`);
+  };
+
+  const handleApplySourceSet = (setKey: (typeof SOURCE_SET_CONFIGS)[number]['key']) => {
+    const config = SOURCE_SET_CONFIGS.find((item) => item.key === setKey);
+    if (!config) {
+      return;
+    }
+    applySourceSelectionByKeywords(config.keywords, config.label);
+  };
+
+  const handleApplyPresetRecommendation = () => {
+    if (!presetSourceRecommendation || !selectedPreset) {
+      setSourceSaveError('먼저 프리셋을 선택해주세요.');
+      setSourceSaveMessage('');
+      return;
+    }
+
+    applySourceSelectionByKeywords(
+      presetSourceRecommendation.keywords,
+      `${selectedPreset} 추천 소스`,
+    );
   };
 
   const handleClearCheckedSources = () => {
@@ -1131,6 +1177,19 @@ export default function HomePage() {
                 상위 3개 자동 선택
               </button>
             </div>
+
+            {presetSourceRecommendation && (
+              <div className="flex flex-col gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 md:flex-row md:items-center md:justify-between">
+                <p className="text-sm text-blue-800">{presetSourceRecommendation.message}</p>
+                <button
+                  type="button"
+                  onClick={handleApplyPresetRecommendation}
+                  className="h-9 rounded-xl border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                >
+                  추천 소스 자동 선택
+                </button>
+              </div>
+            )}
 
             {recommendLoading && <p className="text-sm text-slate-600">추천 분석 중...</p>}
             {!recommendLoading && recommendError && (
