@@ -16,6 +16,14 @@ type RecommendedArticle = {
   reason: string;
 };
 
+type RewriteMode =
+  | 'shorter'
+  | 'easier'
+  | 'hookier'
+  | 'neutral'
+  | 'threads_tone'
+  | 'three_versions';
+
 const PRESET_OPTIONS = [
   '미국 주식 리포트',
   '한국 정치 이슈 정리',
@@ -36,6 +44,9 @@ export default function HomePage() {
   const [recommendError, setRecommendError] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
+  const [rewriteLoading, setRewriteLoading] = useState(false);
+  const [rewriteError, setRewriteError] = useState('');
+  const [rewriteVersions, setRewriteVersions] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const getItemKey = (item: RssItem, idx: number) => `${item.link}-${idx}`;
@@ -150,6 +161,8 @@ export default function HomePage() {
     setError('');
     setDraftError('');
     setDraft('');
+    setRewriteError('');
+    setRewriteVersions([]);
     setCopySuccess(false);
 
     try {
@@ -196,6 +209,78 @@ export default function HomePage() {
     }
   };
 
+  const handleRewriteDraft = async (mode: RewriteMode) => {
+    if (!draft || !selectedPreset) {
+      return;
+    }
+
+    setRewriteLoading(true);
+    setRewriteError('');
+    if (mode !== 'three_versions') {
+      setRewriteVersions([]);
+    }
+
+    try {
+      const res = await fetch('/api/rewrite-thread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preset: selectedPreset,
+          draft,
+          mode,
+        }),
+      });
+
+      const data = (await res.json()) as {
+        draft?: string;
+        versions?: string[];
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(data.error ?? `초안 다듬기에 실패했습니다. (status: ${res.status})`);
+      }
+
+      if (mode === 'three_versions') {
+        const nextVersions = Array.isArray(data.versions)
+          ? data.versions.map((version) => version.trim()).filter(Boolean)
+          : [];
+        if (nextVersions.length === 0) {
+          throw new Error('다른 버전 생성 결과가 비어 있습니다. 다시 시도해주세요.');
+        }
+        setRewriteVersions(nextVersions);
+        return;
+      }
+
+      const nextDraft = data.draft?.trim() ?? '';
+      if (!nextDraft) {
+        throw new Error('다듬어진 초안이 비어 있습니다. 다시 시도해주세요.');
+      }
+
+      setDraft(nextDraft);
+      setCopySuccess(false);
+      setRewriteVersions([]);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : '초안 다듬기 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+      setRewriteError(message);
+    } finally {
+      setRewriteLoading(false);
+    }
+  };
+
+  const handleUseRewriteVersion = (version: string) => {
+    const nextDraft = version.trim();
+    if (!nextDraft) {
+      return;
+    }
+
+    setDraft(nextDraft);
+    setCopySuccess(false);
+    setRewriteVersions([]);
+    setRewriteError('');
+  };
+
   const handleCopyDraft = async () => {
     if (!draft) {
       return;
@@ -221,6 +306,9 @@ export default function HomePage() {
     setRecommendLoading(false);
     setDraft('');
     setDraftError('');
+    setRewriteLoading(false);
+    setRewriteError('');
+    setRewriteVersions([]);
     setCopySuccess(false);
     setDraftLoading(false);
 
@@ -463,6 +551,82 @@ export default function HomePage() {
                   <pre className="whitespace-pre-wrap rounded border bg-slate-50 p-3 text-sm text-slate-700">
                     {draft}
                   </pre>
+                  <div className="space-y-3 rounded border border-slate-200 bg-slate-50 p-3">
+                    <h3 className="text-sm font-semibold text-slate-800">초안 다듬기</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('shorter')}
+                        disabled={rewriteLoading}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        더 짧게
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('easier')}
+                        disabled={rewriteLoading}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        더 쉽게
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('hookier')}
+                        disabled={rewriteLoading}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        더 후킹 있게
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('neutral')}
+                        disabled={rewriteLoading}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        더 중립적으로
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('threads_tone')}
+                        disabled={rewriteLoading}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        Threads 말투로 다듬기
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('three_versions')}
+                        disabled={rewriteLoading}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        다른 버전 3개 생성
+                      </button>
+                    </div>
+                    {rewriteLoading && <p className="text-sm text-slate-600">초안 다듬는 중...</p>}
+                    {!rewriteLoading && rewriteError && (
+                      <div className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+                        {rewriteError}
+                      </div>
+                    )}
+                    {!rewriteLoading && rewriteVersions.length > 0 && (
+                      <div className="space-y-2">
+                        {rewriteVersions.map((version, idx) => (
+                          <article key={`rewrite-version-${idx}`} className="rounded border bg-white p-3">
+                            <p className="mb-2 text-xs font-semibold text-slate-500">버전 {idx + 1}</p>
+                            <pre className="whitespace-pre-wrap text-sm text-slate-700">{version}</pre>
+                            <button
+                              type="button"
+                              onClick={() => handleUseRewriteVersion(version)}
+                              className="mt-2 rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              이 버전 사용
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
