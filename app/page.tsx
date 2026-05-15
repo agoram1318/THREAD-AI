@@ -1310,7 +1310,39 @@ export default function HomePage() {
     (a, b) => a.localeCompare(b, 'ko'),
   );
   const readyDrafts = savedDrafts.filter((savedDraft) => savedDraft.status === 'ready');
+  const draftStatusCount = savedDrafts.filter((savedDraft) => savedDraft.status === 'draft').length;
   const usedDraftCount = savedDrafts.filter((savedDraft) => savedDraft.status === 'used').length;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfWeek = new Date(now);
+  startOfWeek.setHours(0, 0, 0, 0);
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+  const startOfWeekTime = startOfWeek.getTime();
+  const todayDraftCount = savedDrafts.filter((savedDraft) => {
+    const createdAt = new Date(savedDraft.createdAt).getTime();
+    return !Number.isNaN(createdAt) && createdAt >= startOfToday;
+  }).length;
+  const weekDraftCount = savedDrafts.filter((savedDraft) => {
+    const createdAt = new Date(savedDraft.createdAt).getTime();
+    return !Number.isNaN(createdAt) && createdAt >= startOfWeekTime;
+  }).length;
+  const presetCountMap = savedDrafts.reduce<Record<string, number>>((acc, savedDraft) => {
+    acc[savedDraft.selectedPreset] = (acc[savedDraft.selectedPreset] ?? 0) + 1;
+    return acc;
+  }, {});
+  const presetCountEntries = Object.entries(presetCountMap).sort((a, b) => b[1] - a[1]);
+  const topPreset = presetCountEntries[0]?.[0] ?? '';
+  const recentDrafts = [...savedDrafts]
+    .sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      const normalizedA = Number.isNaN(timeA) ? 0 : timeA;
+      const normalizedB = Number.isNaN(timeB) ? 0 : timeB;
+      return normalizedB - normalizedA;
+    })
+    .slice(0, 3);
+  const readyRate = savedDrafts.length > 0 ? Math.round((readyDrafts.length / savedDrafts.length) * 100) : 0;
+  const usedRate = savedDrafts.length > 0 ? Math.round((usedDraftCount / savedDrafts.length) * 100) : 0;
   const filteredSavedDrafts = savedDrafts
     .filter((savedDraft) => {
       if (savedDraftStatusFilter !== 'all' && savedDraft.status !== savedDraftStatusFilter) {
@@ -1955,6 +1987,106 @@ export default function HomePage() {
                   </div>
                 </>
               )}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">콘텐츠 현황 대시보드</h2>
+            <p className="mt-1 text-sm text-slate-500">저장된 초안 데이터를 기준으로 현재 제작 현황을 보여줍니다.</p>
+          </div>
+
+          {savedDrafts.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              아직 통계로 볼 초안이 없습니다. 첫 초안을 생성해보세요.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500">전체 저장 초안</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{savedDrafts.length}개</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500">draft 상태</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{draftStatusCount}개</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500">ready 상태</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{readyDrafts.length}개</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500">used 상태</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{usedDraftCount}개</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500">오늘 생성</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{todayDraftCount}개</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500">이번 주 생성</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{weekDraftCount}개</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500">프리셋별 초안 개수</p>
+                  <ul className="mt-2 space-y-1">
+                    {presetCountEntries.map(([preset, count]) => (
+                      <li key={`preset-count-${preset}`} className="flex items-center justify-between text-sm">
+                        <span className="truncate text-slate-700">{preset}</span>
+                        <span className="font-medium text-slate-900">{count}개</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-700">
+                    가장 많이 사용한 프리셋: {topPreset || '없음'}
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-700">
+                    발행 준비율: {readyRate}%
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-700">
+                    사용 완료율: {usedRate}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">최근 생성 초안 3개</p>
+                <ul className="mt-2 space-y-2">
+                  {recentDrafts.map((recentDraft) => (
+                    <li key={`recent-draft-${recentDraft.id}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-slate-700">{recentDraft.selectedPreset}</span>
+                        <span className="text-xs text-slate-500">{formatDraftDate(recentDraft.createdAt)}</span>
+                        <span className="text-xs text-slate-500">
+                          {recentDraft.status === 'draft'
+                            ? '초안'
+                            : recentDraft.status === 'ready'
+                              ? '발행 준비'
+                              : '사용완료'}
+                        </span>
+                      </div>
+                      <p
+                        className="text-xs text-slate-600"
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 1,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {recentDraft.content}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
         </section>
