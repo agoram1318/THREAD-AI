@@ -193,6 +193,7 @@ export default function HomePage() {
   const [savedDraftStatusFilter, setSavedDraftStatusFilter] = useState<SavedDraftStatusFilter>('all');
   const [savedDraftPresetFilter, setSavedDraftPresetFilter] = useState('all');
   const [savedDraftSort, setSavedDraftSort] = useState<SavedDraftSortOption>('latest');
+  const [readyCombinedText, setReadyCombinedText] = useState('');
   const [autoWorkflowRunning, setAutoWorkflowRunning] = useState(false);
   const [autoWorkflowStep, setAutoWorkflowStep] = useState('');
   const [autoWorkflowLogs, setAutoWorkflowLogs] = useState<AutoWorkflowLog[]>([]);
@@ -413,6 +414,13 @@ export default function HomePage() {
       // Ignore storage write errors.
     }
   }, [draftChecklistById, draftStorageReady]);
+
+  useEffect(() => {
+    const hasReadyDraft = savedDrafts.some((savedDraft) => savedDraft.status === 'ready');
+    if (!hasReadyDraft && readyCombinedText) {
+      setReadyCombinedText('');
+    }
+  }, [savedDrafts, readyCombinedText]);
 
   useEffect(() => {
     if (savedSources.length === 0) {
@@ -1184,6 +1192,93 @@ export default function HomePage() {
     setDraftLibraryMessage('저장된 초안을 삭제했습니다.');
   };
 
+  const getDraftFilenameDate = (createdAt: string) => {
+    const parsedDate = new Date(createdAt);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return new Date().toISOString().slice(0, 10);
+    }
+    return parsedDate.toISOString().slice(0, 10);
+  };
+
+  const triggerTextDownload = (filename: string, content: string) => {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = downloadUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(downloadUrl);
+  };
+
+  const handleDownloadSavedDraftTxt = (savedDraft: SavedThreadDraft) => {
+    const filename = `thread_draft_${getDraftFilenameDate(savedDraft.createdAt)}.txt`;
+    triggerTextDownload(filename, savedDraft.content);
+    setDraftLibraryMessage('초안을 TXT 파일로 다운로드했습니다.');
+  };
+
+  const handleDownloadAllReadyDraftsTxt = () => {
+    const readyDrafts = savedDrafts.filter((savedDraft) => savedDraft.status === 'ready');
+    if (readyDrafts.length === 0) {
+      setDraftLibraryMessage('다운로드할 ready 초안이 없습니다.');
+      return;
+    }
+
+    const mergedText = readyDrafts
+      .map((savedDraft, idx) =>
+        [
+          `### Ready Draft ${idx + 1}`,
+          `프리셋: ${savedDraft.selectedPreset}`,
+          `생성일: ${formatDraftDate(savedDraft.createdAt)}`,
+          '',
+          savedDraft.content,
+        ].join('\n'),
+      )
+      .join('\n\n------------------------------\n\n');
+
+    const filename = `thread_ready_drafts_${new Date().toISOString().slice(0, 10)}.txt`;
+    triggerTextDownload(filename, mergedText);
+    setDraftLibraryMessage('ready 초안을 하나의 TXT 파일로 다운로드했습니다.');
+  };
+
+  const handleBuildReadyCombinedText = () => {
+    const readyDrafts = savedDrafts.filter((savedDraft) => savedDraft.status === 'ready');
+    if (readyDrafts.length === 0) {
+      setReadyCombinedText('');
+      setDraftLibraryMessage('합칠 ready 초안이 없습니다.');
+      return;
+    }
+
+    const mergedText = readyDrafts
+      .map((savedDraft, idx) =>
+        [
+          `[Ready Draft ${idx + 1}]`,
+          `프리셋: ${savedDraft.selectedPreset}`,
+          `생성일: ${formatDraftDate(savedDraft.createdAt)}`,
+          savedDraft.content,
+        ].join('\n'),
+      )
+      .join('\n\n==============================\n\n');
+
+    setReadyCombinedText(mergedText);
+    setDraftLibraryMessage('ready 초안을 하나의 복사용 텍스트로 만들었습니다.');
+  };
+
+  const handleCopyReadyCombinedText = async () => {
+    if (!readyCombinedText.trim()) {
+      setDraftLibraryMessage('복사할 통합 텍스트가 없습니다.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(readyCombinedText);
+      setDraftLibraryMessage('통합 텍스트를 복사했습니다.');
+    } catch {
+      setDraftLibraryMessage('통합 텍스트 복사에 실패했습니다.');
+    }
+  };
+
   const handleCopyDraft = async () => {
     if (!draft) {
       return;
@@ -1214,6 +1309,8 @@ export default function HomePage() {
   const savedDraftPresetOptions = [...new Set(savedDrafts.map((savedDraft) => savedDraft.selectedPreset))].sort(
     (a, b) => a.localeCompare(b, 'ko'),
   );
+  const readyDrafts = savedDrafts.filter((savedDraft) => savedDraft.status === 'ready');
+  const usedDraftCount = savedDrafts.filter((savedDraft) => savedDraft.status === 'used').length;
   const filteredSavedDrafts = savedDrafts
     .filter((savedDraft) => {
       if (savedDraftStatusFilter !== 'all' && savedDraft.status !== savedDraftStatusFilter) {
@@ -2036,6 +2133,118 @@ export default function HomePage() {
                         );
                       })}
                     </ul>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">발행 대기함</h2>
+            <p className="mt-1 text-sm text-slate-500">검수 완료된 ready 초안을 모아보고 복사/내보내기할 수 있습니다.</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            발행 준비 완료 초안 {readyDrafts.length}개 · 사용완료 초안 {usedDraftCount}개 · 전체 저장 초안 {savedDrafts.length}개
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadAllReadyDraftsTxt}
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              전체 ready 초안 TXT로 다운로드
+            </button>
+            <button
+              type="button"
+              onClick={handleBuildReadyCombinedText}
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              전체 ready 초안 복사용 텍스트 만들기
+            </button>
+          </div>
+
+          {readyCombinedText && (
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-slate-700">ready 초안 통합 텍스트</p>
+                <button
+                  type="button"
+                  onClick={handleCopyReadyCombinedText}
+                  className="h-8 rounded-lg bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-700"
+                >
+                  전체 복사
+                </button>
+              </div>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-xs leading-6 text-slate-700">
+                {readyCombinedText}
+              </pre>
+            </div>
+          )}
+
+          {readyDrafts.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              아직 발행 준비 완료된 초안이 없습니다. 검수 체크리스트를 완료해보세요.
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {readyDrafts.map((savedDraft) => (
+                <li key={`ready-queue-${savedDraft.id}`} className="rounded-xl border border-slate-200 p-4">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      {savedDraft.selectedPreset}
+                    </span>
+                    <span className="text-xs text-slate-500">{formatDraftDate(savedDraft.createdAt)}</span>
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                      발행 준비
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      사용 기사 {savedDraft.sourceArticles.length}개
+                    </span>
+                  </div>
+                  <p
+                    className="mb-3 text-sm text-slate-700"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {savedDraft.content}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleLoadSavedDraft(savedDraft)}
+                      className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      불러오기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopySavedDraft(savedDraft)}
+                      className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      복사하기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMarkSavedDraftUsed(savedDraft.id)}
+                      className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      사용완료 표시
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSavedDraftTxt(savedDraft)}
+                      className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      TXT 다운로드
+                    </button>
                   </div>
                 </li>
               ))}
