@@ -585,440 +585,514 @@ export default function HomePage() {
     await collectByUrl(url);
   };
 
+  const currentStageLabel = draft || draftLoading || draftError
+    ? '4단계 진행 중'
+    : selectedPreset || selectedItemKeys.length > 0 || recommendedArticles.length > 0
+      ? '3단계 진행 중'
+      : items.length > 0
+        ? '2단계 진행 중'
+        : '1단계 진행 중';
+
+  const selectedSource = getSourceById(selectedSourceId);
+
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-bold text-slate-900">THREAD-AI 작업 화면</h1>
-        <p className="text-sm text-slate-600">RSS 수집부터 초안 생성까지 순서대로 진행하세요.</p>
-      </header>
+    <main className="min-h-screen bg-slate-50 py-8">
+      <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-8 px-4 md:px-8">
+        <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">THREAD-AI</h1>
+              <p className="text-sm text-slate-500">
+                RSS에서 좋은 기사를 고르고, Threads 초안을 빠르게 생성하세요.
+              </p>
+            </div>
+            <span className="inline-flex w-fit items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+              {currentStageLabel}
+            </span>
+          </div>
+        </header>
 
-      {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+        {error && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm">
+            {error}
+          </div>
+        )}
 
-      <section className="space-y-4 rounded-xl border bg-white p-4 shadow-sm md:p-5">
-        <h2 className="text-xl font-semibold text-slate-900">1단계: RSS 소스 선택</h2>
-
-        <div className="space-y-3 rounded-lg border p-3">
-          <p className="text-sm font-medium text-slate-700">RSS 소스 저장함</p>
-          <div className="flex flex-col gap-2 md:flex-row">
-            <select
-              value={selectedSourceId}
-              onChange={(e) => setSelectedSourceId(e.target.value)}
-              className="w-full rounded border px-3 py-2 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
-            >
-              <option value="">저장된 RSS 소스 선택</option>
-              {savedSources.map((source) => (
-                <option key={source.id} value={source.id}>
-                  {source.name} · {source.category}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleCollectSelectedSource}
-              disabled={!selectedSourceId || loading}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {loading ? '수집 중...' : '이 소스로 수집'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAddSourceForm((prev) => !prev)}
-              className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              {showAddSourceForm ? '입력 닫기' : '새 RSS 소스 추가'}
-            </button>
+        <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">1단계: RSS 소스 선택</h2>
+            <p className="mt-1 text-sm text-slate-500">저장된 RSS 소스를 고르거나 URL을 직접 입력해 수집하세요.</p>
           </div>
 
-          {showAddSourceForm && (
-            <form onSubmit={handleSaveRssSource} className="space-y-2 rounded border bg-slate-50 p-3">
-              <div className="grid gap-2 md:grid-cols-2">
-                <input
-                  type="text"
-                  value={sourceName}
-                  onChange={(e) => setSourceName(e.target.value)}
-                  placeholder="소스 이름"
-                  className="rounded border px-3 py-2 text-sm outline-none ring-blue-500 focus:ring"
-                />
-                <input
-                  type="url"
-                  value={sourceUrl}
-                  onChange={(e) => setSourceUrl(e.target.value)}
-                  placeholder="RSS URL"
-                  className="rounded border px-3 py-2 text-sm outline-none ring-blue-500 focus:ring"
-                />
-              </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                <input
-                  type="text"
-                  value={sourceDescription}
-                  onChange={(e) => setSourceDescription(e.target.value)}
-                  placeholder="간단한 설명"
-                  className="rounded border px-3 py-2 text-sm outline-none ring-blue-500 focus:ring"
-                />
-                <input
-                  type="text"
-                  value={sourceCategory}
-                  onChange={(e) => setSourceCategory(e.target.value)}
-                  placeholder="카테고리"
-                  className="rounded border px-3 py-2 text-sm outline-none ring-blue-500 focus:ring"
-                />
-              </div>
-              <button
-                type="submit"
-                className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-              >
-                저장하기
-              </button>
-            </form>
-          )}
-
-          <div className="rounded border border-dashed p-3">
-            <p className="mb-2 text-xs font-medium text-slate-500">저장함 관리</p>
-            <div className="flex flex-col gap-2 md:flex-row">
+          <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
               <select
-                value={manageSourceId}
-                onChange={(e) => setManageSourceId(e.target.value)}
-                className="w-full rounded border px-3 py-2 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
+                value={selectedSourceId}
+                onChange={(e) => setSelectedSourceId(e.target.value)}
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
               >
-                <option value="">삭제할 소스 선택</option>
+                <option value="">저장된 RSS 소스 선택</option>
                 {savedSources.map((source) => (
                   <option key={source.id} value={source.id}>
-                    {source.name} · {source.url}
+                    {source.name} · {source.category}
                   </option>
                 ))}
               </select>
               <button
                 type="button"
-                onClick={handleDeleteManagedSource}
-                disabled={!manageSourceId}
-                className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                onClick={handleCollectSelectedSource}
+                disabled={!selectedSourceId || loading}
+                className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                삭제
+                {loading ? '수집 중...' : '이 소스로 수집'}
               </button>
             </div>
-          </div>
+            {selectedSource && (
+              <p className="text-xs text-slate-500">
+                선택한 소스: {selectedSource.name} · {selectedSource.description}
+              </p>
+            )}
 
-          {sourceSaveError && (
-            <div className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
-              {sourceSaveError}
-            </div>
-          )}
-          {!sourceSaveError && sourceSaveMessage && (
-            <div className="rounded border border-green-200 bg-green-50 p-2 text-sm text-green-700">
-              {sourceSaveMessage}
-            </div>
-          )}
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-2 rounded-lg border p-3">
-          <label htmlFor="rssUrl" className="block text-sm font-medium text-slate-700">
-            RSS URL 직접 입력
-          </label>
-          <div className="flex flex-col gap-2 md:flex-row">
-            <input
-              id="rssUrl"
-              type="url"
-              required
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com/feed.xml"
-              className="w-full rounded border px-3 py-2 text-sm outline-none ring-blue-500 focus:ring"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {loading ? '수집 중...' : '기사 수집'}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <section className="space-y-3 rounded-xl border bg-white p-4 shadow-sm md:p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-slate-900">2단계: 수집된 기사</h2>
-          <span className="text-sm text-slate-500">총 {items.length}개</span>
-        </div>
-        {items.length === 0 ? (
-          <p className="text-sm text-slate-500">먼저 RSS를 수집하면 기사 목록이 여기에 표시됩니다.</p>
-        ) : (
-          <ul className="divide-y rounded-lg border">
-            {items.map((item, idx) => {
-              const itemKey = getItemKey(item, idx);
-              const isSelected = selectedItemKeys.includes(itemKey);
-              return (
-                <li key={itemKey} className="p-3">
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleItemSelection(itemKey)}
-                      aria-label={`${item.title || '(제목 없음)'} 선택`}
-                      className="mt-1 h-4 w-4 cursor-pointer accent-blue-600"
-                    />
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <a
-                        href={item.link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block truncate text-sm font-semibold text-slate-900 hover:underline"
-                      >
-                        {item.title || '(제목 없음)'}
-                      </a>
-                      <p className="text-xs text-slate-500">
-                        {getArticleSourceLabel(item.link)} · {item.pubDate || '날짜 없음'}
-                      </p>
-                      <p
-                        className="text-xs text-slate-600"
-                        style={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {item.contentSnippet || '요약 없음'}
-                      </p>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <section className="space-y-4 rounded-xl border bg-white p-4 shadow-sm md:p-5">
-        <h2 className="text-xl font-semibold text-slate-900">3단계: AI 추천 및 기사 선택</h2>
-
-        <div className="rounded-lg border p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-sm font-medium text-slate-700">선택한 기사 {selectedItemKeys.length}개</p>
             <button
               type="button"
-              onClick={clearAllSelectedItems}
-              disabled={selectedItemKeys.length === 0}
-              className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              onClick={() => setShowAddSourceForm((prev) => !prev)}
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              전체 해제
+              {showAddSourceForm ? '새 RSS 소스 입력 닫기' : '새 RSS 소스 추가'}
             </button>
+
+            {showAddSourceForm && (
+              <form onSubmit={handleSaveRssSource} className="space-y-2 rounded-xl bg-slate-50 p-3">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <input
+                    type="text"
+                    value={sourceName}
+                    onChange={(e) => setSourceName(e.target.value)}
+                    placeholder="소스 이름"
+                    className="h-11 rounded-xl border border-slate-300 px-3 text-sm outline-none ring-blue-500 focus:ring"
+                  />
+                  <input
+                    type="url"
+                    value={sourceUrl}
+                    onChange={(e) => setSourceUrl(e.target.value)}
+                    placeholder="RSS URL"
+                    className="h-11 rounded-xl border border-slate-300 px-3 text-sm outline-none ring-blue-500 focus:ring"
+                  />
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <input
+                    type="text"
+                    value={sourceDescription}
+                    onChange={(e) => setSourceDescription(e.target.value)}
+                    placeholder="간단한 설명"
+                    className="h-11 rounded-xl border border-slate-300 px-3 text-sm outline-none ring-blue-500 focus:ring"
+                  />
+                  <input
+                    type="text"
+                    value={sourceCategory}
+                    onChange={(e) => setSourceCategory(e.target.value)}
+                    placeholder="카테고리"
+                    className="h-11 rounded-xl border border-slate-300 px-3 text-sm outline-none ring-blue-500 focus:ring"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  저장하기
+                </button>
+              </form>
+            )}
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-xs font-medium text-slate-500">저장함 관리</p>
+              <div className="flex flex-col gap-2 md:flex-row">
+                <select
+                  value={manageSourceId}
+                  onChange={(e) => setManageSourceId(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
+                >
+                  <option value="">삭제할 소스 선택</option>
+                  {savedSources.map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleDeleteManagedSource}
+                  disabled={!manageSourceId}
+                  className="h-10 rounded-xl border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-60"
+                >
+                  삭제
+                </button>
+              </div>
+            </div>
+
+            {sourceSaveError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+                {sourceSaveError}
+              </div>
+            )}
+            {!sourceSaveError && sourceSaveMessage && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-2 text-sm text-green-700">
+                {sourceSaveMessage}
+              </div>
+            )}
           </div>
-          {selectedItemKeys.length === 0 ? (
-            <p className="text-sm text-slate-500">선택된 기사가 없습니다.</p>
+
+          <form onSubmit={handleSubmit} className="space-y-2 rounded-xl border border-slate-200 p-4">
+            <label htmlFor="rssUrl" className="block text-sm font-medium text-slate-700">
+              RSS URL 직접 입력
+            </label>
+            <div className="flex flex-col gap-2 md:flex-row">
+              <input
+                id="rssUrl"
+                type="url"
+                required
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com/feed.xml"
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none ring-blue-500 focus:ring"
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {loading ? '수집 중...' : '기사 수집'}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">2단계: 수집된 기사</h2>
+              <p className="mt-1 text-sm text-slate-500">체크박스로 쓰레드에 사용할 기사를 고르세요.</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+              총 {items.length}개
+            </span>
+          </div>
+
+          {items.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              먼저 RSS를 수집해주세요.
+            </div>
           ) : (
-            <ul className="space-y-1">
-              {selectedItemKeys.map((itemKey) => {
-                const selectedItem = items.find((item, idx) => getItemKey(item, idx) === itemKey);
-                if (!selectedItem) return null;
+            <ul className="space-y-2">
+              {items.map((item, idx) => {
+                const itemKey = getItemKey(item, idx);
+                const isSelected = selectedItemKeys.includes(itemKey);
                 return (
-                  <li key={itemKey} className="flex items-center justify-between gap-2 text-sm">
-                    <span className="truncate text-slate-700">{selectedItem.title || '(제목 없음)'}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeSelectedItem(itemKey)}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-                    >
-                      제거
-                    </button>
+                  <li
+                    key={itemKey}
+                    className={`rounded-xl border p-4 transition ${
+                      isSelected
+                        ? 'border-blue-200 bg-blue-50'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleItemSelection(itemKey)}
+                        aria-label={`${item.title || '(제목 없음)'} 선택`}
+                        className="mt-1 h-4 w-4 cursor-pointer accent-blue-600"
+                      />
+                      <div className="min-w-0 space-y-1">
+                        <a
+                          href={item.link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block truncate text-sm font-semibold text-slate-900 hover:underline"
+                        >
+                          {item.title || '(제목 없음)'}
+                        </a>
+                        <p className="text-xs text-slate-500">
+                          {getArticleSourceLabel(item.link)} · {item.pubDate || '날짜 없음'}
+                        </p>
+                        <p
+                          className="text-xs text-slate-600"
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {item.contentSnippet || '요약 없음'}
+                        </p>
+                      </div>
+                    </div>
                   </li>
                 );
               })}
             </ul>
           )}
-        </div>
+        </section>
 
-        <div className="space-y-3 rounded-lg border p-3">
-          <label className="block text-sm font-medium text-slate-700">프리셋 선택</label>
-          <select
-            value={selectedPreset}
-            onChange={(e) => {
-              setSelectedPreset(e.target.value);
-              setRecommendedArticles([]);
-              setRecommendError('');
-            }}
-            className="w-full rounded border px-3 py-2 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
-          >
-            <option value="">프리셋 선택</option>
-            {PRESET_OPTIONS.map((preset) => (
-              <option key={preset} value={preset}>
-                {preset}
-              </option>
-            ))}
-          </select>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleRecommendArticles}
-              disabled={!canRecommendArticles || recommendLoading}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-            >
-              AI 추천 받기
-            </button>
-            <button
-              type="button"
-              onClick={handleAutoSelectTopRecommended}
-              disabled={recommendedArticles.length === 0}
-              className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-            >
-              상위 3개 자동 선택
-            </button>
+        <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">3단계: AI 추천 및 기사 선택</h2>
+            <p className="mt-1 text-sm text-slate-500">프리셋을 고르고 추천을 받아 선택 기사를 빠르게 완성하세요.</p>
           </div>
-          {recommendLoading && <p className="text-sm text-slate-600">추천 분석 중...</p>}
-          {!recommendLoading && recommendError && (
-            <div className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
-              {recommendError}
+
+          <div className="rounded-xl border border-slate-200 p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-slate-700">
+                선택한 기사
+                <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  {selectedItemKeys.length}개
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={clearAllSelectedItems}
+                disabled={selectedItemKeys.length === 0}
+                className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                전체 해제
+              </button>
             </div>
-          )}
-          {!recommendLoading && recommendedArticles.length > 0 && (
-            <ul className="space-y-2">
-              {recommendedArticles.map((recommended) => (
-                <li key={`${recommended.url}-${recommended.title}`} className="rounded border p-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-800">{recommended.title}</p>
-                      <p className="text-xs text-slate-500">점수 {recommended.score}점</p>
-                      <p className="text-xs text-slate-600">{recommended.reason}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleAddRecommendedArticle(recommended)}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      선택에 추가
-                    </button>
-                  </div>
-                </li>
+            {selectedItemKeys.length === 0 ? (
+              <p className="text-sm text-slate-500">쓰레드에 사용할 기사를 선택해주세요.</p>
+            ) : (
+              <ul className="space-y-1">
+                {selectedItemKeys.map((itemKey) => {
+                  const selectedItem = items.find((item, idx) => getItemKey(item, idx) === itemKey);
+                  if (!selectedItem) return null;
+                  return (
+                    <li key={itemKey} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 p-2">
+                      <span className="truncate text-sm text-slate-700">{selectedItem.title || '(제목 없음)'}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeSelectedItem(itemKey)}
+                        className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-600 hover:bg-slate-100"
+                      >
+                        제거
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+            <label className="block text-sm font-medium text-slate-700">프리셋 선택</label>
+            <select
+              value={selectedPreset}
+              onChange={(e) => {
+                setSelectedPreset(e.target.value);
+                setRecommendedArticles([]);
+                setRecommendError('');
+              }}
+              className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm text-slate-700 outline-none ring-blue-500 focus:ring"
+            >
+              <option value="">프리셋 선택</option>
+              {PRESET_OPTIONS.map((preset) => (
+                <option key={preset} value={preset}>
+                  {preset}
+                </option>
               ))}
-            </ul>
-          )}
-        </div>
-      </section>
+            </select>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleRecommendArticles}
+                disabled={!canRecommendArticles || recommendLoading}
+                className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                AI 추천 받기
+              </button>
+              <button
+                type="button"
+                onClick={handleAutoSelectTopRecommended}
+                disabled={recommendedArticles.length === 0}
+                className="h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                상위 3개 자동 선택
+              </button>
+            </div>
 
-      <section className="space-y-4 rounded-xl border bg-white p-4 shadow-sm md:p-5">
-        <h2 className="text-xl font-semibold text-slate-900">4단계: 쓰레드 초안 생성</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleGenerateDraft}
-            disabled={!canGenerateDraft || draftLoading}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {draftLoading ? '생성 중...' : '쓰레드 초안 생성'}
-          </button>
-          {!canGenerateDraft && (
-            <p className="text-sm text-slate-500">
-              {selectedItems.length === 0 ? '기사를 1개 이상 선택해주세요.' : '프리셋을 선택해주세요.'}
-            </p>
-          )}
-        </div>
-
-        {(draft || draftError || draftLoading) && (
-          <div className="space-y-3 rounded-lg border bg-slate-50 p-3">
-            <h3 className="text-lg font-semibold text-slate-800">생성된 쓰레드 초안</h3>
-            {draftLoading && <p className="text-sm text-slate-600">생성 중...</p>}
-            {!draftLoading && draftError && (
-              <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                {draftError}
+            {recommendLoading && <p className="text-sm text-slate-600">추천 분석 중...</p>}
+            {!recommendLoading && recommendError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {recommendError}
               </div>
             )}
-            {!draftLoading && draft && (
-              <>
-                <pre className="min-h-52 whitespace-pre-wrap rounded border bg-white p-3 text-sm text-slate-700">
-                  {draft}
-                </pre>
-                <div className="space-y-3 rounded border bg-white p-3">
-                  <h4 className="text-sm font-semibold text-slate-800">초안 다듬기</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleRewriteDraft('shorter')}
-                      disabled={rewriteLoading}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                    >
-                      더 짧게
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRewriteDraft('easier')}
-                      disabled={rewriteLoading}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                    >
-                      더 쉽게
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRewriteDraft('hookier')}
-                      disabled={rewriteLoading}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                    >
-                      더 후킹 있게
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRewriteDraft('neutral')}
-                      disabled={rewriteLoading}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                    >
-                      더 중립적으로
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRewriteDraft('threads_tone')}
-                      disabled={rewriteLoading}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                    >
-                      Threads 말투로 다듬기
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRewriteDraft('three_versions')}
-                      disabled={rewriteLoading}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                    >
-                      다른 버전 3개 생성
-                    </button>
-                  </div>
-                  {rewriteLoading && <p className="text-sm text-slate-600">초안 다듬는 중...</p>}
-                  {!rewriteLoading && rewriteError && (
-                    <div className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
-                      {rewriteError}
+            {!recommendLoading && recommendedArticles.length === 0 && !recommendError && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+                프리셋을 선택하고 AI 추천을 받아보세요.
+              </div>
+            )}
+            {!recommendLoading && recommendedArticles.length > 0 && (
+              <ul className="space-y-2">
+                {recommendedArticles.map((recommended) => (
+                  <li key={`${recommended.url}-${recommended.title}`} className="rounded-xl border border-slate-200 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 space-y-1">
+                        <p className="truncate text-sm font-semibold text-slate-800">{recommended.title}</p>
+                        <span className="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                          {recommended.score}점
+                        </span>
+                        <p className="text-xs text-slate-500">{recommended.reason}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAddRecommendedArticle(recommended)}
+                        className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        선택에 추가
+                      </button>
                     </div>
-                  )}
-                  {!rewriteLoading && rewriteVersions.length > 0 && (
-                    <div className="grid gap-2 md:grid-cols-3">
-                      {rewriteVersions.map((version, idx) => (
-                        <article key={`rewrite-version-${idx}`} className="rounded border bg-slate-50 p-3">
-                          <p className="mb-2 text-xs font-semibold text-slate-500">버전 {idx + 1}</p>
-                          <pre className="mb-2 whitespace-pre-wrap text-xs text-slate-700">{version}</pre>
-                          <button
-                            type="button"
-                            onClick={() => handleUseRewriteVersion(version)}
-                            className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-white"
-                          >
-                            이 버전 사용
-                          </button>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCopyDraft}
-                    className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                  >
-                    복사하기
-                  </button>
-                  {copySuccess && <span className="text-sm text-green-700">복사되었습니다</span>}
-                </div>
-              </>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-        )}
-      </section>
+        </section>
+
+        <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">4단계: 쓰레드 초안 생성</h2>
+            <p className="mt-1 text-sm text-slate-500">초안을 생성하고 필요하면 바로 다듬어 사용하세요.</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleGenerateDraft}
+              disabled={!canGenerateDraft || draftLoading}
+              className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {draftLoading ? '생성 중...' : '쓰레드 초안 생성'}
+            </button>
+            {!canGenerateDraft && (
+              <p className="text-sm text-slate-500">
+                {selectedItems.length === 0 ? '쓰레드에 사용할 기사를 선택해주세요.' : '프리셋을 선택해주세요.'}
+              </p>
+            )}
+          </div>
+
+          {!draft && !draftLoading && !draftError && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              기사를 선택한 뒤 초안을 생성해보세요.
+            </div>
+          )}
+
+          {(draft || draftError || draftLoading) && (
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              {draftLoading && <p className="text-sm text-slate-600">생성 중...</p>}
+              {!draftLoading && draftError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {draftError}
+                </div>
+              )}
+              {!draftLoading && draft && (
+                <>
+                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <pre className="min-h-56 whitespace-pre-wrap text-sm leading-7 text-slate-700">{draft}</pre>
+                  </div>
+
+                  <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+                    <h4 className="text-sm font-semibold text-slate-800">초안 다듬기</h4>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('shorter')}
+                        disabled={rewriteLoading}
+                        className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        더 짧게
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('easier')}
+                        disabled={rewriteLoading}
+                        className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        더 쉽게
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('hookier')}
+                        disabled={rewriteLoading}
+                        className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        더 후킹 있게
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('neutral')}
+                        disabled={rewriteLoading}
+                        className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        더 중립적으로
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('threads_tone')}
+                        disabled={rewriteLoading}
+                        className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        Threads 말투로 다듬기
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRewriteDraft('three_versions')}
+                        disabled={rewriteLoading}
+                        className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        다른 버전 3개 생성
+                      </button>
+                    </div>
+                    {rewriteLoading && <p className="text-sm text-slate-600">초안 다듬는 중...</p>}
+                    {!rewriteLoading && rewriteError && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+                        {rewriteError}
+                      </div>
+                    )}
+                    {!rewriteLoading && rewriteVersions.length > 0 && (
+                      <div className="grid gap-2 md:grid-cols-3">
+                        {rewriteVersions.map((version, idx) => (
+                          <article key={`rewrite-version-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="mb-2 text-xs font-semibold text-slate-500">버전 {idx + 1}</p>
+                            <pre className="mb-2 whitespace-pre-wrap text-xs leading-6 text-slate-700">{version}</pre>
+                            <button
+                              type="button"
+                              onClick={() => handleUseRewriteVersion(version)}
+                              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                            >
+                              이 버전 사용
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleCopyDraft}
+                      className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                      복사하기
+                    </button>
+                    {copySuccess && <span className="text-sm text-green-700">복사되었습니다</span>}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
     </main>
   );
 }
