@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 type RssItem = {
   title: string;
@@ -14,6 +14,14 @@ type RecommendedArticle = {
   url: string;
   score: number;
   reason: string;
+};
+
+type SavedRssSource = {
+  id: string;
+  name: string;
+  url: string;
+  description: string;
+  category: string;
 };
 
 type RewriteMode =
@@ -32,8 +40,56 @@ const PRESET_OPTIONS = [
   '질문 유도형 쓰레드',
 ];
 
+const RSS_SOURCES_STORAGE_KEY = 'thread-ai-rss-sources-v1';
+
+const DEFAULT_RSS_SOURCES: SavedRssSource[] = [
+  {
+    id: 'default-bbc-world',
+    name: 'BBC World',
+    url: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+    description: '국제 뉴스와 글로벌 이슈 수집용',
+    category: '국제뉴스',
+  },
+  {
+    id: 'default-marketwatch-top-stories',
+    name: 'MarketWatch Top Stories',
+    url: 'https://www.marketwatch.com/rss/topstories',
+    description: '미국 주식과 경제 주요 뉴스 수집용',
+    category: '미국주식',
+  },
+  {
+    id: 'default-nytimes-technology',
+    name: 'NYTimes Technology',
+    url: 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml',
+    description: '기술, AI, 빅테크 이슈 수집용',
+    category: '기술',
+  },
+  {
+    id: 'default-the-verge',
+    name: 'The Verge',
+    url: 'https://www.theverge.com/rss/index.xml',
+    description: 'IT, 플랫폼, 제품, AI 트렌드 수집용',
+    category: '기술',
+  },
+  {
+    id: 'default-fed-press-releases',
+    name: 'Federal Reserve Press Releases',
+    url: 'https://www.federalreserve.gov/feeds/press_all.xml',
+    description: '연준 보도자료와 금리 정책 이슈 수집용',
+    category: '미국경제',
+  },
+];
+
 export default function HomePage() {
   const [url, setUrl] = useState('');
+  const [savedSources, setSavedSources] = useState<SavedRssSource[]>(DEFAULT_RSS_SOURCES);
+  const [sourceName, setSourceName] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [sourceDescription, setSourceDescription] = useState('');
+  const [sourceCategory, setSourceCategory] = useState('');
+  const [sourceSaveError, setSourceSaveError] = useState('');
+  const [sourceSaveMessage, setSourceSaveMessage] = useState('');
+  const [sourceStorageReady, setSourceStorageReady] = useState(false);
   const [items, setItems] = useState<RssItem[]>([]);
   const [selectedItemKeys, setSelectedItemKeys] = useState<string[]>([]);
   const [selectedPreset, setSelectedPreset] = useState('');
@@ -57,6 +113,74 @@ export default function HomePage() {
   const canGenerateDraft = selectedItems.length > 0 && Boolean(selectedPreset);
   const canRecommendArticles = items.length > 0 && Boolean(selectedPreset);
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(RSS_SOURCES_STORAGE_KEY);
+      if (!raw) {
+        setSourceStorageReady(true);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        setSourceStorageReady(true);
+        return;
+      }
+
+      const normalized = parsed
+        .map((item, idx) => {
+          if (!item || typeof item !== 'object') {
+            return null;
+          }
+
+          const candidate = item as {
+            id?: unknown;
+            name?: unknown;
+            url?: unknown;
+            description?: unknown;
+            category?: unknown;
+          };
+
+          const name = typeof candidate.name === 'string' ? candidate.name.trim() : '';
+          const rssUrl = typeof candidate.url === 'string' ? candidate.url.trim() : '';
+          const description =
+            typeof candidate.description === 'string' ? candidate.description.trim() : '';
+          const category = typeof candidate.category === 'string' ? candidate.category.trim() : '';
+          const id =
+            typeof candidate.id === 'string' && candidate.id.trim()
+              ? candidate.id.trim()
+              : `saved-${idx}-${Date.now()}`;
+
+          if (!name || !rssUrl) {
+            return null;
+          }
+
+          return { id, name, url: rssUrl, description, category };
+        })
+        .filter((item): item is SavedRssSource => Boolean(item));
+
+      if (normalized.length > 0) {
+        setSavedSources(normalized);
+      }
+    } catch {
+      // Ignore localStorage parse errors and keep defaults.
+    } finally {
+      setSourceStorageReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sourceStorageReady) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(RSS_SOURCES_STORAGE_KEY, JSON.stringify(savedSources));
+    } catch {
+      // Ignore storage write errors.
+    }
+  }, [savedSources, sourceStorageReady]);
+
   const toggleItemSelection = (itemKey: string) => {
     setSelectedItemKeys((prev) =>
       prev.includes(itemKey) ? prev.filter((key) => key !== itemKey) : [...prev, itemKey]
@@ -69,6 +193,70 @@ export default function HomePage() {
 
   const removeSelectedItem = (itemKey: string) => {
     setSelectedItemKeys((prev) => prev.filter((key) => key !== itemKey));
+  };
+
+  const handleSaveRssSource = (e: FormEvent) => {
+    e.preventDefault();
+    setSourceSaveError('');
+    setSourceSaveMessage('');
+
+    const nextName = sourceName.trim();
+    const nextUrl = sourceUrl.trim();
+    const nextDescription = sourceDescription.trim();
+    const nextCategory = sourceCategory.trim();
+
+    if (!nextName || !nextUrl || !nextDescription || !nextCategory) {
+      setSourceSaveError('소스 이름, RSS URL, 설명, 카테고리를 모두 입력해주세요.');
+      return;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(nextUrl);
+    } catch {
+      setSourceSaveError('유효한 RSS URL 형식이 아닙니다.');
+      return;
+    }
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      setSourceSaveError('http 또는 https URL만 저장할 수 있습니다.');
+      return;
+    }
+
+    const alreadyExists = savedSources.some(
+      (source) => source.url.toLowerCase() === nextUrl.toLowerCase(),
+    );
+    if (alreadyExists) {
+      setSourceSaveError('이미 저장된 RSS URL입니다.');
+      return;
+    }
+
+    const newSource: SavedRssSource = {
+      id: `saved-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: nextName,
+      url: nextUrl,
+      description: nextDescription,
+      category: nextCategory,
+    };
+
+    setSavedSources((prev) => [newSource, ...prev]);
+    setSourceName('');
+    setSourceUrl('');
+    setSourceDescription('');
+    setSourceCategory('');
+    setSourceSaveMessage('RSS 소스를 저장했습니다.');
+  };
+
+  const handleUseSavedSource = (rssUrl: string) => {
+    setUrl(rssUrl);
+    setSourceSaveMessage('RSS 입력창에 URL을 반영했습니다.');
+    setSourceSaveError('');
+  };
+
+  const handleDeleteSavedSource = (sourceId: string) => {
+    setSavedSources((prev) => prev.filter((source) => source.id !== sourceId));
+    setSourceSaveMessage('RSS 소스를 삭제했습니다.');
+    setSourceSaveError('');
   };
 
   const findItemKeyByRecommendation = (recommended: RecommendedArticle) => {
@@ -336,6 +524,96 @@ export default function HomePage() {
   return (
     <main className="mx-auto max-w-4xl p-6">
       <h1 className="mb-4 text-2xl font-bold">RSS 테스트 수집</h1>
+
+      <section className="mb-6 space-y-3 rounded-lg border bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">RSS 소스 저장함</h2>
+
+        <form onSubmit={handleSaveRssSource} className="space-y-2 rounded border p-3">
+          <div className="grid gap-2 md:grid-cols-2">
+            <input
+              type="text"
+              value={sourceName}
+              onChange={(e) => setSourceName(e.target.value)}
+              placeholder="소스 이름 (예: BBC World)"
+              className="rounded border px-3 py-2 text-sm outline-none ring-blue-500 focus:ring"
+            />
+            <input
+              type="url"
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              placeholder="RSS URL"
+              className="rounded border px-3 py-2 text-sm outline-none ring-blue-500 focus:ring"
+            />
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <input
+              type="text"
+              value={sourceDescription}
+              onChange={(e) => setSourceDescription(e.target.value)}
+              placeholder="간단한 설명"
+              className="rounded border px-3 py-2 text-sm outline-none ring-blue-500 focus:ring"
+            />
+            <input
+              type="text"
+              value={sourceCategory}
+              onChange={(e) => setSourceCategory(e.target.value)}
+              placeholder="카테고리 (예: 기술)"
+              className="rounded border px-3 py-2 text-sm outline-none ring-blue-500 focus:ring"
+            />
+          </div>
+          <button
+            type="submit"
+            className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            RSS 소스 저장
+          </button>
+          {sourceSaveError && (
+            <div className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+              {sourceSaveError}
+            </div>
+          )}
+          {!sourceSaveError && sourceSaveMessage && (
+            <div className="rounded border border-green-200 bg-green-50 p-2 text-sm text-green-700">
+              {sourceSaveMessage}
+            </div>
+          )}
+        </form>
+
+        {savedSources.length === 0 ? (
+          <p className="text-sm text-slate-500">저장된 RSS 소스가 없습니다.</p>
+        ) : (
+          <ul className="space-y-2">
+            {savedSources.map((source) => (
+              <li key={source.id} className="rounded border p-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-semibold text-slate-800">{source.name}</p>
+                    <p className="text-xs text-slate-500">카테고리: {source.category}</p>
+                    <p className="text-sm text-slate-700">{source.description}</p>
+                    <p className="truncate text-xs text-slate-500">{source.url}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleUseSavedSource(source.url)}
+                      className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      이 URL 사용하기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSavedSource(source.id)}
+                      className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <form onSubmit={handleSubmit} className="mb-6 rounded-lg border bg-white p-4 shadow-sm">
         <label htmlFor="rssUrl" className="mb-2 block text-sm font-medium text-slate-700">
