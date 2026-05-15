@@ -32,12 +32,14 @@ const extractTextFromResponse = (response: OpenAI.Responses.Response) => {
 };
 
 const extractSourceSection = (draft: string) => {
-  const marker = '참고 출처 목록';
-  const start = draft.indexOf(marker);
-  if (start < 0) {
-    return '';
+  const markers = ['참고:', '참고 출처 목록'];
+  for (const marker of markers) {
+    const start = draft.indexOf(marker);
+    if (start >= 0) {
+      return draft.slice(start).trim();
+    }
   }
-  return draft.slice(start).trim();
+  return '';
 };
 
 const extractJsonObject = (text: string) => {
@@ -81,11 +83,12 @@ const buildSingleRewritePrompt = (
 ) => {
   const sourceRule = sourceSection
     ? [
-        '아래 참고 출처 목록을 제목/링크 기준으로 유지하세요. 항목 누락, 임의 추가, URL 변경을 하지 마세요.',
-        '[현재 참고 출처 목록]',
+        '아래 참고 정보의 출처명은 유지하세요. 항목 누락, 임의 추가를 하지 마세요.',
+        '본문에는 긴 URL을 넣지 말고 출처명 중심으로 간단히 유지하세요.',
+        '[현재 참고 정보]',
         sourceSection,
       ].join('\n')
-    : '참고 출처 목록 섹션을 반드시 포함하고, 기존 본문에 있는 출처 정보만 사용하세요.';
+    : '마지막 줄에 "참고: 출처명1, 출처명2" 형식을 포함하고, 긴 URL은 출력하지 마세요.';
 
   return [
     '너는 한국어 Threads 에디터다.',
@@ -94,10 +97,14 @@ const buildSingleRewritePrompt = (
     '',
     '[필수 규칙]',
     '1) 기존 초안의 핵심 사실을 유지하고, 원문에 없는 새로운 사실을 만들지 마세요.',
-    '2) 섹션 구조(제목 순서)는 유지하세요.',
-    '3) 투자 관련 내용은 매수/매도 추천처럼 보이지 않게 작성하세요.',
-    '4) 정치 관련 내용은 특정 진영 지지 표현을 피하고 사실/해석을 구분하세요.',
-    `5) ${sourceRule}`,
+    '2) 리포트형 섹션 제목(예: 후킹 문장, 오늘의 핵심 이슈)을 그대로 쓰지 마세요.',
+    '3) 번호형 구조(1️⃣, 2️⃣, 3️⃣)는 유지하고 문단은 짧게 나누세요.',
+    '4) 문체는 딱딱한 보고서체 대신 쉬운 설명 말투로 작성하세요.',
+    '5) 이모지는 글당 3~5개만 사용하고, 반드시 아래 목록에서만 선택하세요: 📌 📈 📉 🏦 ⚠️ 💬',
+    '6) 투자 관련 내용은 매수/매도 추천처럼 보이지 않게 작성하세요.',
+    '7) 정치 관련 내용은 특정 진영 지지 표현을 피하고 사실/해석을 구분하세요.',
+    '8) 마지막에 "※ 투자 추천이 아닌 시장 흐름 정리입니다." 문구를 포함하세요. (투자/경제 주제일 때)',
+    `9) ${sourceRule}`,
     '',
     '[출력 규칙]',
     '최종 다듬어진 본문만 출력하세요. 설명 문장이나 주석은 출력하지 마세요.',
@@ -110,11 +117,12 @@ const buildSingleRewritePrompt = (
 const buildThreeVersionsPrompt = (preset: string, originalDraft: string, sourceSection: string) => {
   const sourceRule = sourceSection
     ? [
-        '아래 참고 출처 목록을 각 버전에서 동일하게 유지하세요. 항목 누락, 임의 추가, URL 변경을 금지합니다.',
-        '[현재 참고 출처 목록]',
+        '아래 참고 정보의 출처명은 각 버전에서 동일하게 유지하세요. 항목 누락, 임의 추가를 금지합니다.',
+        '본문에는 긴 URL을 넣지 말고 출처명 중심으로 간단히 표기하세요.',
+        '[현재 참고 정보]',
         sourceSection,
       ].join('\n')
-    : '각 버전에 참고 출처 목록 섹션을 포함하고, 기존 초안의 출처 정보만 사용하세요.';
+    : '각 버전에 마지막 줄 "참고: 출처명1, 출처명2"를 포함하고 긴 URL은 출력하지 마세요.';
 
   return [
     '너는 한국어 Threads 에디터다.',
@@ -128,10 +136,14 @@ const buildThreeVersionsPrompt = (preset: string, originalDraft: string, sourceS
     '',
     '[필수 규칙]',
     '1) 원문에 없는 새로운 사실을 만들지 마세요.',
-    '2) 섹션 구조(제목 순서)는 유지하세요.',
-    '3) 투자 관련 내용은 매수/매도 추천처럼 보이지 않게 작성하세요.',
-    '4) 정치 관련 내용은 특정 진영 지지 표현을 피하고 사실/해석을 구분하세요.',
-    `5) ${sourceRule}`,
+    '2) 리포트형 섹션 제목(예: 후킹 문장, 오늘의 핵심 이슈)을 그대로 쓰지 마세요.',
+    '3) 번호형 구조(1️⃣, 2️⃣, 3️⃣)는 유지하고 문단은 짧게 나누세요.',
+    '4) 문체는 딱딱한 보고서체 대신 쉬운 설명 말투로 작성하세요.',
+    '5) 이모지는 글당 3~5개만 사용하고, 반드시 아래 목록에서만 선택하세요: 📌 📈 📉 🏦 ⚠️ 💬',
+    '6) 투자 관련 내용은 매수/매도 추천처럼 보이지 않게 작성하세요.',
+    '7) 정치 관련 내용은 특정 진영 지지 표현을 피하고 사실/해석을 구분하세요.',
+    '8) 마지막에 "※ 투자 추천이 아닌 시장 흐름 정리입니다." 문구를 포함하세요. (투자/경제 주제일 때)',
+    `9) ${sourceRule}`,
     '',
     '[출력 규칙]',
     'JSON 객체만 출력하세요. 마크다운 코드블록 금지.',
