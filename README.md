@@ -1,36 +1,140 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# THREAD-AI
 
-## Getting Started
+RSS 기반으로 기사를 수집하고, 프리셋에 맞춰 Threads 초안을 자동 생성/다듬기/저장/발행 준비까지 할 수 있는 MVP 웹앱입니다.
 
-First, run the development server:
+## 1) 현재 구현된 주요 기능
 
+### 자동 생성 탭
+- 프리셋 선택
+- 프리셋 기반 추천 소스 자동 선택
+- 반자동 워크플로우 실행
+  - 소스 선택
+  - 다중 RSS 수집
+  - AI 기사 추천
+  - 상위 기사 자동 선택
+  - Threads 초안 생성
+- 단계별 진행 상태/로그 표시
+- 생성된 초안 확인, 복사, 저장
+- 초안 다듬기(더 짧게/더 쉽게/더 후킹/중립/Threads 톤/3개 버전 생성)
+
+### 수동 편집 탭
+- RSS URL 직접 입력 수집
+- 저장된 RSS 소스 다중 선택 수집
+- 수집 기사 통합 목록 표시
+- 기사 다중 선택/해제
+- AI 기사 추천 및 상위 추천 자동 선택
+- 선택 기사 목록 관리
+
+### 소스 관리 탭
+- RSS 소스 저장함(localStorage) 관리
+- 소스 추가/삭제
+- 소스 이름/URL/카테고리/설명 표시
+- 추천 소스 세트 빠른 선택
+- 프리셋별 소스 매칭 기준 안내
+
+### 초안 관리 탭
+- 콘텐츠 현황 대시보드(총량/상태/기간/프리셋 통계)
+- 저장된 초안 검색/필터/정렬
+- 저장 초안 불러오기/복사/삭제/사용완료 표시
+- 발행 전 검수 체크리스트
+- 상태 관리(`draft` / `ready` / `used`)
+- 발행 대기함(ready 초안 모음)
+- TXT 다운로드(단건/전체 ready)
+- 전체 ready 초안 통합 텍스트 생성/복사
+
+### API 라우트
+- `POST /api/rss-test`: RSS 수집/파싱
+- `POST /api/recommend-articles`: 프리셋 맞춤 AI 기사 추천
+- `POST /api/generate-thread`: OpenAI 기반 초안 생성
+- `POST /api/rewrite-thread`: OpenAI 기반 초안 다듬기/3버전 생성
+
+## 2) 사용자 사용 순서 (권장 플로우)
+
+실사용은 **자동 생성 탭 중심**으로 진행하는 것을 권장합니다.
+
+1. 자동 생성 탭에서 프리셋을 선택합니다.
+2. `추천 소스 자동 선택` 버튼으로 소스를 맞춥니다.
+3. `자동 생성 시작`을 눌러 수집/추천/선택/초안 생성을 한 번에 실행합니다.
+4. 생성된 초안을 확인하고 필요 시 다듬기 버튼으로 개선합니다.
+5. `복사하기`로 즉시 활용하거나 `초안 저장`으로 보관합니다.
+6. 초안 관리 탭에서 체크리스트를 완료해 `ready` 상태로 올립니다.
+7. 발행 대기함에서 TXT 다운로드 또는 통합 복사로 발행 준비를 마무리합니다.
+
+보조 시나리오:
+- 자동 결과가 원하는 방향과 다르면 수동 편집 탭에서 기사 선택을 직접 조정한 뒤 다시 초안 생성합니다.
+- 소스가 부족하면 소스 관리 탭에서 RSS를 추가하고 다시 자동 생성을 실행합니다.
+
+## 3) 로컬 실행 방법
+
+### 요구사항
+- Node.js 18+ (권장: LTS)
+- npm
+
+### 설치 및 실행
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+브라우저에서 `http://localhost:3000` 접속
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 빌드 확인
+```bash
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 4) 환경변수 설정 (OPENAI_API_KEY)
 
-## Learn More
+프로젝트 루트에 `.env.local` 파일을 만들고 아래를 추가하세요.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+OPENAI_API_KEY=your_openai_api_key_here
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+참고:
+- 예시 파일: `.env.local.example`
+- `.env.local` 수정 후에는 개발 서버를 재시작해야 반영됩니다.
+- 키가 없으면 AI 관련 API(`generate/recommend/rewrite`)는 동작하지 않습니다.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 5) Vercel 배포 시 환경변수 설정 방법
 
-## Deploy on Vercel
+1. Vercel 프로젝트 대시보드로 이동
+2. `Settings` -> `Environment Variables`
+3. 아래 항목 추가
+   - Key: `OPENAI_API_KEY`
+   - Value: 발급받은 OpenAI API 키
+   - Environment: `Production` (필요 시 `Preview`, `Development`도 추가)
+4. 저장 후 재배포(또는 Redeploy)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+체크포인트:
+- 최신 커밋이 실제로 배포되고 있는지 확인
+- 환경변수 추가 후 기존 배포가 아닌 새 배포로 반영되었는지 확인
+- 필요 시 Build Cache를 비우고 재배포
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 6) 아직 구현하지 않은 기능 / 향후 개선점
+
+### 미구현(현재 범위 밖)
+- 서버 DB 영속 저장(현재는 `localStorage` 기반)
+- 사용자 계정/권한/팀 협업 기능
+- Threads API 직접 발행 자동화
+- 발행 스케줄링(예약 발행)
+- 크로스 디바이스 동기화
+
+### 개선 제안(다음 단계)
+- 초안 버전 히스토리 및 비교(diff) UI
+- RSS 파싱 안정성 강화(Atom/예외 포맷 대응 확대)
+- 추천/생성 품질 측정 지표(클릭/사용 전환율) 대시보드
+- 프리셋 커스텀 편집 기능(사용자 정의 프롬프트)
+- 에러 메시지 UX 개선(원인/해결 가이드 노출)
+- E2E 테스트 도입(핵심 플로우 회귀 방지)
+
+## 7) 기술 스택 요약
+- Next.js App Router
+- React + TypeScript
+- Tailwind CSS v4
+- OpenAI Responses API (`gpt-4.1-mini`)
+- Client storage: `localStorage`
+
+---
+
+문의/개선 요청 시, 재현 경로(어느 탭에서 어떤 버튼을 눌렀는지)와 콘솔/네트워크 에러를 함께 남기면 더 빠르게 대응할 수 있습니다.
