@@ -29,6 +29,7 @@ export default function HomePage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const getItemKey = (item: RssItem, idx: number) => `${item.link}-${idx}`;
+  // Selected items are derived from keys to keep UI state minimal.
   const selectedItems = selectedItemKeys
     .map((itemKey) => items.find((item, idx) => getItemKey(item, idx) === itemKey))
     .filter((item): item is RssItem => Boolean(item));
