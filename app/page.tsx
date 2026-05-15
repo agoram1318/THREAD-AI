@@ -7,6 +7,7 @@ type RssItem = {
   link: string;
   pubDate: string;
   contentSnippet: string;
+  sourceName?: string;
 };
 
 type RecommendedArticle = {
@@ -85,6 +86,7 @@ export default function HomePage() {
   const [savedSources, setSavedSources] = useState<SavedRssSource[]>(DEFAULT_RSS_SOURCES);
   const [selectedSourceId, setSelectedSourceId] = useState(DEFAULT_RSS_SOURCES[0]?.id ?? '');
   const [manageSourceId, setManageSourceId] = useState(DEFAULT_RSS_SOURCES[0]?.id ?? '');
+  const [checkedSourceIds, setCheckedSourceIds] = useState<string[]>([]);
   const [showAddSourceForm, setShowAddSourceForm] = useState(false);
   const [sourceName, setSourceName] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
@@ -106,6 +108,7 @@ export default function HomePage() {
   const [rewriteLoading, setRewriteLoading] = useState(false);
   const [rewriteError, setRewriteError] = useState('');
   const [rewriteVersions, setRewriteVersions] = useState<string[]>([]);
+  const [multiCollectWarning, setMultiCollectWarning] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const getItemKey = (item: RssItem, idx: number) => `${item.link}-${idx}`;
@@ -198,6 +201,8 @@ export default function HomePage() {
     if (!savedSources.some((source) => source.id === manageSourceId)) {
       setManageSourceId(savedSources[0].id);
     }
+
+    setCheckedSourceIds((prev) => prev.filter((sourceId) => savedSources.some((source) => source.id === sourceId)));
   }, [savedSources, selectedSourceId, manageSourceId]);
 
   const toggleItemSelection = (itemKey: string) => {
@@ -220,12 +225,22 @@ export default function HomePage() {
 
   const getSourceById = (sourceId: string) => savedSources.find((source) => source.id === sourceId);
 
-  const getArticleSourceLabel = (link: string) => {
+  const getArticleSourceLabel = (item: RssItem) => {
+    if (item.sourceName?.trim()) {
+      return item.sourceName.trim();
+    }
+
     try {
-      return new URL(link).hostname.replace(/^www\./, '');
+      return new URL(item.link).hostname.replace(/^www\./, '');
     } catch {
       return '출처 없음';
     }
+  };
+
+  const toggleSourceCheckbox = (sourceId: string) => {
+    setCheckedSourceIds((prev) =>
+      prev.includes(sourceId) ? prev.filter((id) => id !== sourceId) : [...prev, sourceId],
+    );
   };
 
   const handleSaveRssSource = (e: FormEvent) => {
@@ -292,15 +307,10 @@ export default function HomePage() {
     setSourceSaveError('');
   };
 
-  const collectByUrl = async (nextUrl: string) => {
-    const targetUrl = nextUrl.trim();
-    if (!targetUrl) {
-      setError('RSS URL을 입력해주세요.');
-      return;
-    }
-
+  const prepareCollection = () => {
     setLoading(true);
     setError('');
+    setMultiCollectWarning('');
     setItems([]);
     setSelectedItemKeys([]);
     setSelectedPreset('');
@@ -314,21 +324,35 @@ export default function HomePage() {
     setRewriteVersions([]);
     setCopySuccess(false);
     setDraftLoading(false);
+  };
+
+  const fetchRssItems = async (targetUrl: string) => {
+    const res = await fetch('/api/rss-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: targetUrl }),
+    });
+    const data = (await res.json()) as { items?: RssItem[]; error?: string };
+
+    if (!res.ok) {
+      throw new Error(data.error ?? '알 수 없는 오류가 발생했습니다.');
+    }
+
+    return data.items ?? [];
+  };
+
+  const collectByUrl = async (nextUrl: string) => {
+    const targetUrl = nextUrl.trim();
+    if (!targetUrl) {
+      setError('RSS URL을 입력해주세요.');
+      return;
+    }
+
+    prepareCollection();
 
     try {
-      const res = await fetch('/api/rss-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error ?? '알 수 없는 오류가 발생했습니다.');
-      }
-
-      setItems(data.items ?? []);
+      const nextItems = await fetchRssItems(targetUrl);
+      setItems(nextItems.map((item) => ({ ...item, sourceName: '직접 입력' })));
       setUrl(targetUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : '요청 처리 중 오류가 발생했습니다.');
@@ -346,7 +370,73 @@ export default function HomePage() {
 
     setSourceSaveError('');
     setSourceSaveMessage(`${source.name} 소스로 수집을 시작합니다.`);
-    await collectByUrl(source.url);
+    prepareCollection();
+
+    try {
+      const nextItems = await fetchRssItems(source.url);
+      setItems(nextItems.map((item) => ({ ...item, sourceName: source.name })));
+      setUrl(source.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '요청 처리 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCollectCheckedSources = async () => {
+    if (checkedSourceIds.length === 0) {
+      setSourceSaveError('전체 수집할 RSS 소스를 1개 이상 선택해주세요.');
+      return;
+    }
+
+    const selectedSources = savedSources.filter((source) => checkedSourceIds.includes(source.id));
+    if (selectedSources.length === 0) {
+      setSourceSaveError('선택된 RSS 소스를 찾을 수 없습니다.');
+      return;
+    }
+
+    setSourceSaveError('');
+    setSourceSaveMessage(`선택한 소스 ${selectedSources.length}개를 순서대로 수집합니다.`);
+    prepareCollection();
+
+    const failedSourceNames: string[] = [];
+    const mergedItems: RssItem[] = [];
+
+    for (const source of selectedSources) {
+      try {
+        const sourceItems = await fetchRssItems(source.url);
+        for (const item of sourceItems) {
+          mergedItems.push({ ...item, sourceName: source.name });
+        }
+      } catch {
+        failedSourceNames.push(source.name);
+      }
+    }
+
+    const dedupedItems: RssItem[] = [];
+    const seenLinks = new Set<string>();
+    for (const item of mergedItems) {
+      const normalizedLink = item.link?.trim() ?? '';
+      if (normalizedLink && seenLinks.has(normalizedLink)) {
+        continue;
+      }
+      if (normalizedLink) {
+        seenLinks.add(normalizedLink);
+      }
+      dedupedItems.push(item);
+    }
+
+    setItems(dedupedItems);
+
+    if (failedSourceNames.length > 0) {
+      setMultiCollectWarning(`일부 소스 수집 실패: ${failedSourceNames.join(', ')}`);
+    }
+
+    if (dedupedItems.length === 0 && failedSourceNames.length > 0) {
+      setError('선택한 소스에서 기사를 가져오지 못했습니다.');
+    }
+
+    setLoading(false);
   };
 
   const handleDeleteManagedSource = () => {
@@ -653,6 +743,49 @@ export default function HomePage() {
               </p>
             )}
 
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-slate-500">여러 소스 동시 수집</p>
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  선택 {checkedSourceIds.length}개
+                </span>
+              </div>
+              {savedSources.length === 0 ? (
+                <p className="text-xs text-slate-500">저장된 소스가 없습니다.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {savedSources.map((source) => (
+                    <li key={`check-${source.id}`} className="rounded-lg bg-white p-2">
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={checkedSourceIds.includes(source.id)}
+                          onChange={() => toggleSourceCheckbox(source.id)}
+                          className="h-4 w-4 accent-blue-600"
+                        />
+                        <span className="truncate text-sm text-slate-700">
+                          {source.name} · {source.category}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                onClick={handleCollectCheckedSources}
+                disabled={checkedSourceIds.length === 0 || loading}
+                className="h-10 rounded-xl bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {loading ? '수집 중...' : '선택한 소스 전체 수집'}
+              </button>
+              {multiCollectWarning && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-2 text-sm text-amber-700">
+                  {multiCollectWarning}
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={() => setShowAddSourceForm((prev) => !prev)}
@@ -814,7 +947,7 @@ export default function HomePage() {
                           {item.title || '(제목 없음)'}
                         </a>
                         <p className="text-xs text-slate-500">
-                          {getArticleSourceLabel(item.link)} · {item.pubDate || '날짜 없음'}
+                          {getArticleSourceLabel(item)} · {item.pubDate || '날짜 없음'}
                         </p>
                         <p
                           className="text-xs text-slate-600"
