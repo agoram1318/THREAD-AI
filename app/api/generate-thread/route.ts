@@ -18,12 +18,20 @@ const extractDraftText = (response: OpenAI.Responses.Response) => {
     return primaryText;
   }
 
-  const fallbackText = (response.output ?? [])
-    .flatMap((item) => item.content ?? [])
-    .filter((content): content is { type: 'output_text'; text: string } => content.type === 'output_text')
-    .map((content) => content.text)
-    .join('\n')
-    .trim();
+  const textChunks: string[] = [];
+  for (const item of response.output ?? []) {
+    if (!('content' in item) || !Array.isArray(item.content)) {
+      continue;
+    }
+
+    for (const content of item.content as Array<{ type?: string; text?: string }>) {
+      if (content.type === 'output_text' && typeof content.text === 'string') {
+        textChunks.push(content.text);
+      }
+    }
+  }
+
+  const fallbackText = textChunks.join('\n').trim();
 
   return fallbackText;
 };
